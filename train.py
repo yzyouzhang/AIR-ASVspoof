@@ -40,7 +40,7 @@ def initParams():
                         choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'], default='cnn')
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=8, help="Number of epochs for training")
+    parser.add_argument('--num_epochs', type=int, default=80, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=1024, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
@@ -50,9 +50,10 @@ def initParams():
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
     parser.add_argument('--add_loss', type=str, default=None, help="add other loss for one-class training")
-    parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
+    parser.add_argument('--weight_loss', type=float, default=0.0002, help="weight for other loss")
 
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
+    parser.add_argument('--visualize', type=bool, default=False, help="feature visualization")
 
     args = parser.parse_args()
 
@@ -132,7 +133,7 @@ def train(args):
         cqcc_model = model_.CNN_LSTM(nclasses=2).to(args.device)
     elif args.model == 'resnet':
         node_dict = {"CQCC": 4, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 50}
-        cqcc_model = ResNet(node_dict[args.feat], resnet_type='18', nclasses=2).to(args.device)
+        cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
 
 
     # Loss and optimizer
@@ -244,13 +245,11 @@ def train(args):
                     desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
                 t.set_description(desc_str)
 
-                # if (i + 1) % 5 == 0:
-                #     print('Epoch [{}/{}], Step [{}/{}], cqcc_loss: {:.6f}'
-                #           .format(epoch_num + 1, args.num_epochs, i + 1, total_step, cqcc_loss.item()))
+        if args.visualize:
+            feat = torch.cat(ip1_loader, 0)
+            labels = torch.cat(idx_loader, 0)
+            visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), epoch_num+1)
 
-        feat = torch.cat(ip1_loader, 0)
-        labels = torch.cat(idx_loader, 0)
-        visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), epoch_num+1)
         # Val the model
         # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
         cqcc_model.eval()

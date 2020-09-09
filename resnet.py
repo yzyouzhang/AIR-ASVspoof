@@ -202,7 +202,7 @@ RESNET_CONFIGS = {'18': [[2, 2, 2, 2], PreActBlock],
 
 
 class ResNet(nn.Module):
-    def __init__(self, num_nodes, resnet_type='18', nclasses=-1):
+    def __init__(self, num_nodes, enc_dim, resnet_type='18', nclasses=2):
         self.in_planes = 16
         super(ResNet, self).__init__()
 
@@ -226,9 +226,9 @@ class ResNet(nn.Module):
         self.fc = nn.Linear(256 * 2, 256)
         self.lbn = nn.BatchNorm1d(256)
 
-        self.fc_feat = nn.Linear(256, 2)
+        self.fc_feat = nn.Linear(256, enc_dim)
 
-        self.fc_mu = nn.Linear(2, nclasses) if nclasses >= 2 else nn.Linear(256, 1)
+        self.fc_mu = nn.Linear(enc_dim, nclasses) if nclasses >= 2 else nn.Linear(enc_dim, 1)
 
         self.initialize_params()
 
@@ -275,10 +275,10 @@ class ResNet(nn.Module):
         x = self.activation(self.bn5(x)).squeeze(2)
         # print(x.shape)
 
-        x = x.reshape(x.size(0), -1)
-        stats = self.fc_att(x)
+        # x = x.reshape(x.size(0), -1)
+        # stats = self.fc_att(x)
 
-        # stats = self.attention(x.permute(0, 2, 1).contiguous())
+        stats = self.attention(x.permute(0, 2, 1).contiguous())
         # print(stats.shape)
 
         fc = F.relu(self.lbn(self.fc(stats)))
