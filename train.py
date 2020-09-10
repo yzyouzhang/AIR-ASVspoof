@@ -172,7 +172,7 @@ def train(args):
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
     ip1_loader, idx_loader = [], []
-
+    early_stop_cnt = 0
     prev_loss = 1e8
 
     for epoch_num in tqdm(range(args.num_epochs)):

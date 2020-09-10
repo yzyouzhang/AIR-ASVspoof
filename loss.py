@@ -103,22 +103,23 @@ class IsolateLoss(nn.Module):
             x: feature matrix with shape (batch_size, feat_dim).
             labels: ground truth labels with shape (batch_size).
         """
-        batch_size = x.size(0)
-        o1 = nn.ReLU()(torch.norm(x-self.center, p=2, dim=1) - self.r_real).unsqueeze(1)
-        o2 = nn.ReLU()(self.r_fake - torch.norm(x-self.center, p=2, dim=1)).unsqueeze(1)
-
-        distmat = torch.cat((o1, o2), dim=1)
-
-        classes = torch.arange(self.num_classes).long().cuda()
-        # classes = classes.cuda()
-        labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
-        mask = labels.eq(classes.expand(batch_size, self.num_classes))
-
-        dist = distmat * mask.float()
-        loss = dist.clamp(min=1e-12, max=1e+12).sum(0) / mask.sum(0)
-
-        return loss.sum()
-
+        # batch_size = x.size(0)
+        # o1 = nn.ReLU()(torch.norm(x-self.center, p=2, dim=1) - self.r_real).unsqueeze(1)
+        # o2 = nn.ReLU()(self.r_fake - torch.norm(x-self.center, p=2, dim=1)).unsqueeze(1)
+        #
+        # distmat = torch.cat((o1, o2), dim=1)
+        #
+        # classes = torch.arange(self.num_classes).long().cuda()
+        # # classes = classes.cuda()
+        # labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
+        # mask = labels.eq(classes.expand(batch_size, self.num_classes))
+        #
+        # dist = distmat * mask.float()
+        # loss = dist.clamp(min=1e-12, max=1e+12).sum(0) / mask.sum(0)
+        # loss = loss.sum()
+        loss = F.relu(torch.norm(x[labels==0]-self.center, p=2, dim=1) - self.r_real).mean() \
+               + F.relu(self.r_fake - torch.norm(x[labels==1]-self.center, p=2, dim=1)).mean()
+        return loss
 
 class LGMLoss_v0(nn.Module):
     """
