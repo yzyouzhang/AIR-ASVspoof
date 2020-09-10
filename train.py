@@ -286,7 +286,7 @@ def train(args):
                     feats, cqcc_outputs = cqcc_model(cqcc)
                     cqcc_loss = criterion(cqcc_outputs, labels)
                     devlossDict["feat_loss"].append(cqcc_loss.item())
-                    if args.add_loss == None or args.add_loss == "center" or args.add_loss == "lgcl":
+                    if args.add_loss in [None, "center", "lgcl", "isolate"]:
                         _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
                         total += labels.size(0)
                         cqcc_correct += (cqcc_predicted == labels).sum().item()
@@ -311,6 +311,9 @@ def train(args):
                 torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
                 if args.add_loss == "center":
                     loss_model = centerLoss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+                elif args.add_loss == "isolate":
+                    loss_model = iso_loss
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
                 elif args.add_loss == "lgm":
                     loss_model = lgm_loss
@@ -350,7 +353,7 @@ def test(args, model, loss_model, part='eval'):
             feats, cqcc_outputs = model(cqcc)
             labels = labels.to(args.device)
 
-            if args.add_loss == None or args.add_loss == "center":
+            if args.add_loss in [None, "center", "isolate"]:
                 _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
                 total += labels.size(0)
                 cqcc_correct += (cqcc_predicted == labels).sum().item()
