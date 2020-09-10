@@ -167,7 +167,7 @@ def train(args):
         lgcl_optimzer = torch.optim.SGD(lgcl_loss.parameters(), lr=0.01)
 
     if args.add_loss == "isolate":
-        iso_loss = IsolateLoss(2, args.enc_dim).to(args.device)
+        iso_loss = IsolateLoss(2, args.enc_dim,r_real=0.5, r_fake=6).to(args.device)
         iso_loss.train()
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 

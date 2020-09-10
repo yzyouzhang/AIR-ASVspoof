@@ -72,9 +72,9 @@ def reload_melspec(path_to_audio, path_to_features, part):
     for i in range(len(audio_files)):
         audio, sr = librosa.load(audio_files[i], sr=16000, mono=True)
         key = audio_files[i][len(path_to_audio + part + '/flac/'):-5]
-        melspec_dict[key] = librosa.feature.melspectrogram(y=audio, sr=sr, n_fft=512, hop_length=128)
-    with open(path_to_features + part + 'MelspecFeatureMat.pkl', 'wb') as handle5:
-        pickle.dump(melspec_dict, handle5, protocol=pickle.HIGHEST_PROTOCOL)
+        melspec = librosa.feature.melspectrogram(y=audio, sr=sr, n_fft=512, hop_length=128)
+        with open(path_to_features + part +'/'+ key +'Melspec.pkl', 'wb') as handle5:
+            pickle.dump(melspec, handle5, protocol=pickle.HIGHEST_PROTOCOL)
 
 def reload_wavform(path_to_audio, path_to_features, part):
     audio_files = find_files(path_to_audio + part + '/flac/', ext='flac')
@@ -98,8 +98,8 @@ if __name__ == "__main__":
         # reload_mfcc(path_to_audio, path_to_features, part)
         # reload_cqt(path_to_audio, path_to_features, part)
         # reload_stft(path_to_audio, path_to_features, part)
-        # reload_melspec(path_to_audio, path_to_features, part)
-        reload_wavform(path_to_audio, path_to_features, part)
+        reload_melspec(path_to_audio, path_to_features, part)
+        # reload_wavform(path_to_audio, path_to_features, part)
     # reload_melspec(path_to_audio, path_to_features, "eval")
 
 
