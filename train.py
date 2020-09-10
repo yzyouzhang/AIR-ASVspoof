@@ -10,7 +10,7 @@ from resnet import ResNet
 from dataset import ASVspoof2019
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
-from loss import CenterLoss, LGMLoss_v0, LMCL_loss
+from loss import CenterLoss, LGMLoss_v0, LMCL_loss, IsolateLoss
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from tqdm import tqdm, trange
@@ -49,11 +49,11 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--add_loss', type=str, default=None, help="add other loss for one-class training")
+    parser.add_argument('--add_loss', type=str, default=None, choices=['center', 'lgm', 'lgcl', 'isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=0.0002, help="weight for other loss")
 
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
-    parser.add_argument('--visualize', type=bool, default=False, help="feature visualization")
+    parser.add_argument('--visualize', action='store_true', help="feature visualization")
 
     args = parser.parse_args()
 
@@ -152,19 +152,24 @@ def train(args):
     print("Feature shape", cqcc.shape)
 
     if args.add_loss == "center":
-        centerLoss = CenterLoss(10, 2).to(args.device)
+        centerLoss = CenterLoss(2, args.enc_dim).to(args.device)
         centerLoss.train()
         center_optimzer = torch.optim.SGD(centerLoss.parameters(), lr=0.5)
 
     if args.add_loss == "lgm":
-        lgm_loss = LGMLoss_v0(10, 2, 1.0).to(args.device)
+        lgm_loss = LGMLoss_v0(2, args.enc_dim, 1.0).to(args.device)
         lgm_loss.train()
         lgm_optimzer = torch.optim.SGD(lgm_loss.parameters(), lr=0.1)
 
     if args.add_loss == "lgcl":
-        lgcl_loss = LMCL_loss(10, 2).to(args.device)
+        lgcl_loss = LMCL_loss(2, args.enc_dim).to(args.device)
         lgcl_loss.train()
         lgcl_optimzer = torch.optim.SGD(lgcl_loss.parameters(), lr=0.01)
+
+    if args.add_loss == "isolate":
+        iso_loss = IsolateLoss(2, args.enc_dim).to(args.device)
+        iso_loss.train()
+        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
     ip1_loader, idx_loader = [], []
 
@@ -211,6 +216,17 @@ def train(args):
                     # for param in centerLoss.parameters():
                     #     param.grad.data *= (1. / args.weight_loss)
                     center_optimzer.step()
+
+                if args.add_loss == "isolate":
+                    isoloss = iso_loss(feats, labels)
+                    trainlossDict["feat"].append(cqcc_loss.item())
+                    cqcc_loss += isoloss * args.weight_loss
+                    cqcc_optimizer.zero_grad()
+                    iso_optimzer.zero_grad()
+                    trainlossDict["iso"].append(isoloss.item())
+                    cqcc_loss.backward()
+                    cqcc_optimizer.step()
+                    iso_optimzer.step()
 
                 if args.add_loss == "lgm":
                     outputs, moutputs, likelihood = lgm_loss(feats, labels)
@@ -322,7 +338,7 @@ def train(args):
 def test(args, model, loss_model, part='eval'):
     test_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, part,
                             args.feat, feat_len=args.feat_len)
-    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers)
     cqcc_correct = 0
     total = 0
     with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:

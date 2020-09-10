@@ -79,48 +79,45 @@ class CenterlossFunction(Function):
 
         return grad_feature * grad_output, None, grad_centers
 
-# class CenterLoss(nn.Module):
-#     """Center loss.
-#
-#         Reference:
-#         Wen et al. A Discriminative Feature Learning Approach for Deep Face Recognition. ECCV 2016.
-#
-#         Args:
-#             num_classes (int): number of classes.
-#             feat_dim (int): feature dimension.
-#         """
-#     def __init__(self, num_classes=10, feat_dim=2, use_gpu=True):
-#         super(CenterLoss, self).__init__()
-#         self.num_classes = num_classes
-#         self.feat_dim = feat_dim
-#         self.use_gpu = use_gpu
-#
-#         if self.use_gpu:
-#             self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim).cuda())
-#         else:
-#             self.centers = nn.Parameter(torch.randn(self.num_classes, self.feat_dim))
-#
-#     def forward(self, x, labels):
-#         """
-#         Args:
-#             x: feature matrix with shape (batch_size, feat_dim).
-#             labels: ground truth labels with shape (batch_size).
-#         """
-#         batch_size = x.size(0)
-#         distmat = torch.pow(x, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_classes) + \
-#                   torch.pow(self.centers, 2).sum(dim=1, keepdim=True).expand(self.num_classes, batch_size).t()
-#         distmat.addmm_(1, -2, x, self.centers.t())
-#
-#         classes = torch.arange(self.num_classes).long()
-#         if self.use_gpu:
-#             classes = classes.cuda()
-#         labels = labels.unsqueeze(1).expand(batch_size, self.num_classes)
-#         mask = labels.eq(classes.expand(batch_size, self.num_classes))
-#
-#         dist = distmat * mask.float()
-#         loss = dist.clamp(min=1e-12, max=1e+12).sum() / batch_size
-#
-#         return loss
+class IsolateLoss(nn.Module):
+    """Isolate loss.
+
+        Reference:
+        I. Masi, A. Killekar, R. M. Mascarenhas, S. P. Gurudatt, and W. AbdAlmageed, “Two-branch Recurrent Network for Isolating Deepfakes in Videos,” 2020, [Online]. Available: http://arxiv.org/abs/2008.03412.
+        Args:
+            num_classes (int): number of classes.
+            feat_dim (int): feature dimension.
+        """
+    def __init__(self, num_classes=10, feat_dim=2, r_real=0.042, r_fake=1.638):
+        super(IsolateLoss, self).__init__()
+        self.num_classes = num_classes
+        self.feat_dim = feat_dim
+        self.r_real = r_real
+        self.r_fake = r_fake
+
+        self.center = nn.Parameter(torch.randn(1, self.feat_dim))
+
+    def forward(self, x, labels):
+        """
+        Args:
+            x: feature matrix with shape (batch_size, feat_dim).
+            labels: ground truth labels with shape (batch_size).
+        """
+        batch_size = x.size(0)
+        o1 = nn.ReLU()(torch.norm(x-self.center, p=2, dim=1) - self.r_real).unsqueeze(1)
+        o2 = nn.ReLU()(self.r_fake - torch.norm(x-self.center, p=2, dim=1)).unsqueeze(1)
+
+        distmat = torch.cat((o1, o2), dim=1)
+
+        classes = torch.arange(self.num_classes).long().cuda()
+        # classes = classes.cuda()
+        labels = labels.expand(batch_size, self.num_classes)
+        mask = labels.eq(classes.expand(batch_size, self.num_classes))
+
+        dist = distmat * mask.float()
+        loss = dist.clamp(min=1e-12, max=1e+12).sum(0) / mask.sum(0)
+
+        return loss.sum()
 
 
 class LGMLoss_v0(nn.Module):
@@ -188,3 +185,23 @@ class LMCL_loss(nn.Module):
         margin_logits = self.s * (logits - y_onehot)
 
         return logits, margin_logits
+
+
+if __name__ == "__main__":
+    feats = torch.randn((32, 90)).cuda()
+    center = torch.randn((1,90)).cuda()
+    o = torch.norm(feats - center, p=2, dim=1)
+    print(o.shape)
+    # dist = torch.cat((o, o), dim=1)
+    # print(dist.shape)
+    labels = torch.cat((torch.Tensor([0]).repeat(10).unsqueeze(1),
+                       torch.Tensor([1]).repeat(22).unsqueeze(1)),0).cuda()
+    # classes = torch.arange(2).long().cuda()
+    # labels = labels.expand(32, 2)
+    # print(labels)
+    # mask = labels.eq(classes.expand(32, 2))
+    # print(mask)
+
+    # iso_loss = IsolateLoss(2, 90).cuda()
+    # loss = iso_loss(feats, labels)
+    # print(loss.shape)
