@@ -140,7 +140,7 @@ class MultiCenterIsolateLoss(nn.Module):
                 if dist.item() < min_dist:
                     min_dist = dist.item()
             total_min_dist.append(min_dist)
-        total_min_dist = torch.Tensor(total_min_dist)
+        total_min_dist = torch.Tensor(total_min_dist).cuda()
         total_min_dist.requires_grad = True
         loss = F.relu(total_min_dist - self.r_real).mean()
         for i in range(self.centers.shape[0]):

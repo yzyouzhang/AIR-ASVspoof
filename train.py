@@ -172,13 +172,13 @@ def train(args):
         lgcl_optimzer = torch.optim.SGD(lgcl_loss.parameters(), lr=0.01)
 
     if args.add_loss == "isolate":
-        iso_loss = IsolateLoss(2, args.enc_dim, r_real=0.5, r_fake=180).to(args.device)
+        iso_loss = IsolateLoss(2, args.enc_dim, r_real=0.5, r_fake=30).to(args.device)
         iso_loss.train()
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
     if args.add_loss == "multicenter_isolate":
         centers = torch.randn((3, args.enc_dim)) * 10
-        centers = centers.tp(args.device)
+        centers = centers.to(args.device)
 
     ip1_loader, idx_loader = [], []
     early_stop_cnt = 0
@@ -283,7 +283,7 @@ def train(args):
 
         if args.add_loss == "multicenter_isolate":
             kmeans = KMeans(n_clusters=3, init='k-means++', random_state=0).fit(ip1_loader.cpu.numpy())
-            centers = torch.from_numpy(kmeans.cluster_centers_)
+            centers = torch.from_numpy(kmeans.cluster_centers_).to(args.device)
 
         if args.visualize:
             feat = torch.cat(ip1_loader, 0)
