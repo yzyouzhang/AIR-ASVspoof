@@ -121,6 +121,32 @@ class IsolateLoss(nn.Module):
                + F.relu(self.r_fake - torch.norm(x[labels==1]-self.center, p=2, dim=1)).mean()
         return loss
 
+class MultiCenterIsolateLoss(nn.Module):
+    def __init__(self, centers, num_classes=10, feat_dim=2, r_real=0.042, r_fake=1.638):
+        super(MultiCenterIsolateLoss, self).__init__()
+        self.num_classes = num_classes
+        self.feat_dim = feat_dim
+        self.r_real = r_real
+        self.r_fake = r_fake
+
+        self.centers = centers
+
+    def forward(self, x, labels):
+        total_min_dist = []
+        for genuine in x[labels==0]:
+            min_dist = 1e8
+            for i in range(self.centers.shape[0]):
+                dist = torch.norm(genuine-self.centers[i].unsqueeze(0), p=2, dim=1)
+                if dist.item() < min_dist:
+                    min_dist = dist.item()
+            total_min_dist.append(min_dist)
+        total_min_dist = torch.Tensor(total_min_dist)
+        total_min_dist.requires_grad = True
+        loss = F.relu(total_min_dist - self.r_real).mean()
+        for i in range(self.centers.shape[0]):
+            loss += F.relu(self.r_fake - torch.norm(x[labels==1]-self.centers[i], p=2, dim=1)).mean()
+        return loss
+
 class LGMLoss_v0(nn.Module):
     """
     LGMLoss whose covariance is fixed as Identity matrix
@@ -190,19 +216,21 @@ class LMCL_loss(nn.Module):
 
 if __name__ == "__main__":
     feats = torch.randn((32, 90)).cuda()
-    center = torch.randn((1,90)).cuda()
-    o = torch.norm(feats - center, p=2, dim=1)
-    print(o.shape)
+    centers = torch.randn((3,90)).cuda()
+    # o = torch.norm(feats - center, p=2, dim=1)
+    # print(o.shape)
     # dist = torch.cat((o, o), dim=1)
     # print(dist.shape)
-    labels = torch.cat((torch.Tensor([0]).repeat(10).unsqueeze(1),
-                       torch.Tensor([1]).repeat(22).unsqueeze(1)),0).cuda()
+    labels = torch.cat((torch.Tensor([0]).repeat(10),
+                       torch.Tensor([1]).repeat(22)),0).cuda()
     # classes = torch.arange(2).long().cuda()
     # labels = labels.expand(32, 2)
     # print(labels)
     # mask = labels.eq(classes.expand(32, 2))
     # print(mask)
 
-    # iso_loss = IsolateLoss(2, 90).cuda()
-    # loss = iso_loss(feats, labels)
+    iso_loss = MultiCenterIsolateLoss(centers, 2, 90).cuda()
+    loss = iso_loss(feats, labels)
+    for p in iso_loss.parameters():
+        print(p)
     # print(loss.shape)

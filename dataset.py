@@ -25,8 +25,8 @@ class ASVspoof2019(Dataset):
                       "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
                       "A19": 19}
         self.label = {"spoof": 1, "bonafide": 0}
-        # with open(self.ptf + feature + 'FeatureMat.pkl', 'rb') as cqcc_handle:
-        #     self.cqcc_mat = pickle.load(cqcc_handle)
+        with open(self.ptf + feature + 'FeatureMat.pkl', 'rb') as cqcc_handle:
+            self.cqcc_mat = pickle.load(cqcc_handle)
 
         ## add this if statement since we may change the data split
         if self.part == "train":
