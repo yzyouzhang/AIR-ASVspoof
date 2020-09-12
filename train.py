@@ -52,6 +52,8 @@ def initParams():
 
     parser.add_argument('--add_loss', type=str, default=None, choices=['center', 'lgm', 'lgcl', 'isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=0.0002, help="weight for other loss")
+    parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
+    parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
 
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
     parser.add_argument('--visualize', action='store_true', help="feature visualization")
@@ -107,7 +109,7 @@ def visualize(args, feat, labels, epoch):
     c = ['#ff0000', '#00ff00']
     plt.clf()
     for i in range(2):
-        plt.plot(feat[labels == i, 0], feat[labels == i, 1], '.', c=c[i])
+        plt.plot(feat[labels == i, 0], feat[labels == i, 1], '.', c=c[i], markersize=1)
     plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc='upper right')
     #   plt.xlim(xmin=-5,xmax=5)
     #   plt.ylim(ymin=-5,ymax=5)
@@ -172,7 +174,7 @@ def train(args):
         lgcl_optimzer = torch.optim.SGD(lgcl_loss.parameters(), lr=0.01)
 
     if args.add_loss == "isolate":
-        iso_loss = IsolateLoss(2, args.enc_dim, r_real=0.5, r_fake=30).to(args.device)
+        iso_loss = IsolateLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
         iso_loss.train()
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
@@ -189,6 +191,7 @@ def train(args):
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
         print('\nEpoch: %d ' % (epoch_num + 1))
+        # with trange(2) as t:
         with trange(len(trainDataLoader)) as t:
             for i in t:
                 cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
@@ -238,7 +241,7 @@ def train(args):
                     iso_optimzer.step()
 
                 if args.add_loss == "multicenter_isolate":
-                    multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=0.5, r_fake=180).to(
+                    multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(
                         args.device)
                     trainlossDict["feat"].append(cqcc_loss.item())
                     multiisoloss = multicenter_iso_loss(feats, labels)
@@ -282,7 +285,7 @@ def train(args):
                 t.set_description(desc_str)
 
         if args.add_loss == "multicenter_isolate":
-            kmeans = KMeans(n_clusters=3, init='k-means++', random_state=0).fit(ip1_loader.cpu.numpy())
+            kmeans = KMeans(n_clusters=3, init='k-means++', random_state=0).fit(torch.cat(ip1_loader, 0).data.cpu().numpy())
             centers = torch.from_numpy(kmeans.cluster_centers_).to(args.device)
 
         if args.visualize:
@@ -387,7 +390,7 @@ def test(args, model, loss_model, part='eval'):
             feats, cqcc_outputs = model(cqcc)
             labels = labels.to(args.device)
 
-            if args.add_loss in [None, "center", "isolate"]:
+            if args.add_loss in [None, "center", "isolate", "multicenter_isolate"]:
                 _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
                 total += labels.size(0)
                 cqcc_correct += (cqcc_predicted == labels).sum().item()

@@ -377,7 +377,7 @@ class DOC_ResNet(nn.Module):
         return feats_ref, out_ref, feats_tar, out_tar
 
 if __name__ == "__main__":
-    cqcc = torch.randn((32,1,90,650))
-    resnet = ResNet(4, resnet_type='18', nclasses=2)
+    cqcc = torch.randn((32,1,90,788)).cuda()
+    resnet = ResNet(4, 2, resnet_type='18', nclasses=2).cuda()
     _, output = resnet(cqcc)
     print(output.shape)
