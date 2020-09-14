@@ -32,9 +32,10 @@ def initParams():
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
 
     # Dataset prepare
-    parser.add_argument("--feat", type=str, help="which feature to use",
+    parser.add_argument("--feat", type=str, help="which feature to use", required=True,
                         choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT"], default='CQCC')
     parser.add_argument("--feat_len", type=int, help="features length", default=650)
+    parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=16)
 
     parser.add_argument('-m', '--model', help='Model arch', required=True,
@@ -42,7 +43,7 @@ def initParams():
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=80, help="Number of epochs for training")
-    parser.add_argument('--batch_size', type=int, default=1024, help="Mini batch size for training")
+    parser.add_argument('--batch_size', type=int, default=32, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
     parser.add_argument('--beta_2', type=float, default=0.999, help="beta_2 for Adam")
@@ -50,8 +51,8 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--add_loss', type=str, default=None, choices=['center', 'lgm', 'lgcl', 'isolate', 'multicenter_isolate'], help="add other loss for one-class training")
-    parser.add_argument('--weight_loss', type=float, default=0.0002, help="weight for other loss")
+    parser.add_argument('--add_loss', type=str, default='isolate', choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'multicenter_isolate'], help="add other loss for one-class training")
+    parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
 
@@ -149,11 +150,13 @@ def train(args):
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
-                                args.feat, feat_len=args.feat_len)
+                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
     validation_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
-                                  args.feat, feat_len=args.feat_len)
-    trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
+    trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                 collate_fn=training_set.collate_fn)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                               collate_fn=validation_set.collate_fn)
 
     cqcc, _, _, _ = training_set[23]
     print("Feature shape", cqcc.shape)
@@ -377,8 +380,9 @@ def train(args):
 
 def test(args, model, loss_model, part='eval'):
     test_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, part,
-                            args.feat, feat_len=args.feat_len)
-    testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers)
+                            args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
+    testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
+                                collate_fn=test_set.collate_fn)
     cqcc_correct = 0
     total = 0
     with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:
