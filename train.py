@@ -104,17 +104,20 @@ def initParams():
     return args
 
 def visualize(args, feat, labels, epoch):
-    plt.ion()
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), sharex='col', sharey='col')
+    # plt.ion()
     # c = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
     #      '#ff00ff', '#990000', '#999900', '#009900', '#009999']
-    c = ['#ff0000', '#00ff00']
-    plt.clf()
-    for i in range(2):
-        plt.plot(feat[labels == i, 0], feat[labels == i, 1], '.', c=c[i], markersize=1)
-    plt.legend(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'], loc='upper right')
+    c = ['#ff0000', '#003366']
+    # plt.clf()
+    ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
+    ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
+    ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
+    ax3.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=2)
+    fig.legend(['genuine', 'spoofing'], loc='upper right')
     #   plt.xlim(xmin=-5,xmax=5)
     #   plt.ylim(ymin=-5,ymax=5)
-    plt.text(-4.8, 3.6, "epoch=%d" % epoch)
+    fig.suptitle("Feature Visualization of Epoch %d" % epoch)
     plt.savefig(os.path.join(args.out_fold, 'vis_loss_epoch=%d.jpg' % epoch))
     plt.show()
     plt.close()

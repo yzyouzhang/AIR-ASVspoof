@@ -12,6 +12,7 @@ torch.set_default_tensor_type(torch.FloatTensor)
 class ASVspoof2019(Dataset):
     def __init__(self, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC', genuine_only=False, feat_len=650, pad_chop=True):
         self.ptd = path_to_database
+        self.path_to_features = path_to_features
         self.part = part
         self.ptf = os.path.join(path_to_features, self.part)
         self.path_to_audio = os.path.join(self.ptd, 'LA/ASVspoof2019_LA_'+ self.part +'/flac/')
@@ -54,14 +55,23 @@ class ASVspoof2019(Dataset):
 
     def __getitem__(self, idx):
         speaker, filename, _, tag, label = self.all_info[idx]
-        with open(self.ptf + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
-            feat_mat = pickle.load(feature_handle)
+        try:
+            with open(self.ptf + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
+                feat_mat = pickle.load(feature_handle)
+        except:
+            def the_other(train_or_dev):
+                assert train_or_dev in ["train", "dev"]
+                res = "dev" if train_or_dev == "train" else "train"
+                return res
+            with open(os.path.join(self.path_to_features, the_other(self.part)) + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
+                feat_mat = pickle.load(feature_handle)
 
         return torch.from_numpy(feat_mat), filename, self.tag[tag], self.label[label]
 
     def collate_fn(self, samples):
         from torch.utils.data.dataloader import default_collate
         if self.pad_chop:
+
             return default_collate(samples)
         else:
             feat_mat = [sample[0].transpose(0, 1) for sample in samples]
