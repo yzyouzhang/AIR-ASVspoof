@@ -11,10 +11,9 @@ from dataset import ASVspoof2019
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from loss import CenterLoss, LGMLoss_v0, LMCL_loss, IsolateLoss, MultiCenterIsolateLoss
-import matplotlib.pyplot as plt
 from collections import defaultdict
 from tqdm import tqdm, trange
-from sklearn.cluster import KMeans
+from utils import *
 
 torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -51,7 +50,8 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--add_loss', type=str, default='isolate', choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'multicenter_isolate'], help="add other loss for one-class training")
+    parser.add_argument('--add_loss', type=str, default='isolate',
+                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
@@ -59,6 +59,10 @@ def initParams():
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
     parser.add_argument('--visualize', action='store_true', help="feature visualization")
     parser.add_argument('--test_only', action='store_true', help="test the trained model in case the test crash sometimes or another test method")
+
+    parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
+    parser.add_argument('--prtrn_mthd', type=str, default='cross_entropy',
+                            choices=['cross_entropy', 'single_center'], help="pretrain method, in other words, pretrain with what loss")
 
     args = parser.parse_args()
 
@@ -103,24 +107,57 @@ def initParams():
 
     return args
 
-def visualize(args, feat, labels, epoch):
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), sharex='col', sharey='col')
-    # plt.ion()
-    # c = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
-    #      '#ff00ff', '#990000', '#999900', '#009900', '#009999']
-    c = ['#ff0000', '#003366']
-    # plt.clf()
-    ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
-    ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
-    ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
-    ax3.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=2)
-    fig.legend(['genuine', 'spoofing'], loc='upper right')
-    #   plt.xlim(xmin=-5,xmax=5)
-    #   plt.ylim(ymin=-5,ymax=5)
-    fig.suptitle("Feature Visualization of Epoch %d" % epoch)
-    plt.savefig(os.path.join(args.out_fold, 'vis_loss_epoch=%d.jpg' % epoch))
-    plt.show()
-    plt.close()
+def pre_train(args, trainDataLoader, model, model_optimizer):
+    trainlossDict = defaultdict(list)
+    model.train()
+    ip1_loader, idx_loader = [], []
+    with trange(len(trainDataLoader)) as t:
+        for i in t:
+            cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
+            cqcc = cqcc.unsqueeze(1).float().to(args.device)
+            labels = labels.to(args.device)
+            feats, cqcc_outputs = model(cqcc)
+            if args.prtrn_mthd == "cross_entropy":
+                criterion = nn.CrossEntropyLoss()
+                cqcc_loss = criterion(cqcc_outputs, labels)
+                model_optimizer.zero_grad()
+                trainlossDict["feat_loss"].append(cqcc_loss.item())
+                cqcc_loss.backward()
+                model_optimizer.step()
+
+            # if pretrain_method == "center":
+            #     centerloss = centerLoss(feats, labels)
+            #     trainlossDict["feat"].append(cqcc_loss.item())
+            #     cqcc_loss += centerloss * args.weight_loss
+            #     cqcc_optimizer.zero_grad()
+            #     center_optimzer.zero_grad()
+            #     trainlossDict["center"].append(centerloss.item())
+            #     cqcc_loss.backward()
+            #     cqcc_optimizer.step()
+            #     # for param in centerLoss.parameters():
+            #     #     param.grad.data *= (1. / args.weight_loss)
+            #     center_optimzer.step()
+            #
+            # if pretrain_method == "isolate":
+            #     isoloss = iso_loss(feats, labels)
+            #     trainlossDict["feat"].append(cqcc_loss.item())
+            #     cqcc_loss = isoloss * args.weight_loss
+            #     cqcc_optimizer.zero_grad()
+            #     iso_optimzer.zero_grad()
+            #     trainlossDict["iso"].append(isoloss.item())
+            #     cqcc_loss.backward()
+            #     cqcc_optimizer.step()
+            #     iso_optimzer.step()
+
+
+            desc_str = ''
+            for key in sorted(trainlossDict.keys()):
+                desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
+            t.set_description(desc_str)
+    visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), epoch_num + 1)
+
+    return model, model_optimizer
+
 
 def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
@@ -146,7 +183,6 @@ def train(args):
         node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 50}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
 
-
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
@@ -154,15 +190,19 @@ def train(args):
 
     training_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
+    genuine_trainset = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
+                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, genuine_only=True)
     validation_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
     trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=training_set.collate_fn)
+    genuine_trainDataLoader = DataLoader(genuine_trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+                                 collate_fn=genuine_trainset.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                collate_fn=validation_set.collate_fn)
 
-    cqcc, _, _, _ = training_set[23]
-    print("Feature shape", cqcc.shape)
+    feat, _, _, _ = training_set[23]
+    print("Feature shape", feat.shape)
 
     if args.add_loss == "center":
         centerLoss = CenterLoss(2, args.enc_dim).to(args.device)
@@ -187,12 +227,15 @@ def train(args):
     if args.add_loss == "multicenter_isolate":
         centers = torch.randn((3, args.enc_dim)) * 10
         centers = centers.to(args.device)
+        if args.pre_train:
+            cqcc_model, cqcc_optimizer = pre_train(args, trainDataLoader, cqcc_model, cqcc_optimizer)
+            centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model)
 
-    ip1_loader, idx_loader = [], []
     early_stop_cnt = 0
     prev_loss = 1e8
 
     for epoch_num in tqdm(range(args.num_epochs)):
+        genuine_feats, ip1_loader, idx_loader = [], [], []
         cqcc_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
@@ -282,6 +325,7 @@ def train(args):
                     cqcc_optimizer.step()
                     lgcl_optimzer.step()
 
+                # genuine_feats.append(feats[labels==0])
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
 
@@ -291,8 +335,7 @@ def train(args):
                 t.set_description(desc_str)
 
         if args.add_loss == "multicenter_isolate":
-            kmeans = KMeans(n_clusters=3, init='k-means++', random_state=0).fit(torch.cat(ip1_loader, 0).data.cpu().numpy())
-            centers = torch.from_numpy(kmeans.cluster_centers_).to(args.device)
+            centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model)
 
         if args.visualize:
             feat = torch.cat(ip1_loader, 0)
@@ -304,10 +347,6 @@ def train(args):
         cqcc_model.eval()
 
         with torch.no_grad():
-            cqcc_correct = 0
-
-            total = 0
-
             with trange(len(valDataLoader)) as v:
                 for i in v:
                     cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]

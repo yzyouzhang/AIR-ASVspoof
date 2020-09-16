@@ -144,7 +144,7 @@ class MultiCenterIsolateLoss(nn.Module):
         total_min_dist.requires_grad = True
         loss = F.relu(total_min_dist - self.r_real).mean()
         for i in range(self.centers.shape[0]):
-            loss += F.relu(self.r_fake - torch.norm(x[labels==1]-self.centers[i], p=2, dim=1)).mean()
+            loss += F.relu(self.r_fake - torch.norm(x[labels==1]-self.centers[i], p=2, dim=1)).mean() / self.centers.shape[0]
         return loss
 
 class LGMLoss_v0(nn.Module):

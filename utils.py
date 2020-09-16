@@ -2,6 +2,43 @@ import json
 import os
 import re
 import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+import torch
+
+def visualize(args, feat, labels, epoch):
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), sharex='col', sharey='col')
+    # plt.ion()
+    # c = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
+    #      '#ff00ff', '#990000', '#999900', '#009900', '#009999']
+    c = ['#ff0000', '#003366']
+    # plt.clf()
+    ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
+    ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
+    plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
+    ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
+    ax3.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=2)
+    fig.legend(['genuine', 'spoofing'], loc='upper right')
+    #   plt.xlim(xmin=-5,xmax=5)
+    #   plt.ylim(ymin=-5,ymax=5)
+    fig.suptitle("Feature Visualization of Epoch %d" % epoch)
+    plt.savefig(os.path.join(args.out_fold, 'vis_loss_epoch=%d.jpg' % epoch))
+    plt.show()
+    fig.clf()
+    plt.close(fig)
+
+def seek_centers_kmeans(args, num_centers, genuine_dataloader, model):
+    model.eval()
+    genuine_feats = []
+    with torch.no_grad():
+        for i, (feat, _, _, _) in enumerate(genuine_dataloader):
+            feat = feat.unsqueeze(1).float().to(args.device)
+            new_feats, _ = model(feat)
+            genuine_feats.append(new_feats)
+        kmeans = KMeans(n_clusters=num_centers, init='k-means++', random_state=0).fit(torch.cat(genuine_feats, 0).data.cpu().numpy())
+        centers = torch.from_numpy(kmeans.cluster_centers_).to(args.device)
+        model.train()
+    return centers
 
 def read_args_json(model_path):
     with open(os.path.join(model_path, "args.json"), 'r') as json_file:
