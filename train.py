@@ -143,7 +143,7 @@ def train(args):
         node_dict = {"CQCC": 90, "CQT": 192, "LFCC": 60, "MFCC": 50}
         cqcc_model = model_.CNN_LSTM(nclasses=2).to(args.device)
     elif args.model == 'resnet':
-        node_dict = {"CQCC": 4, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 50}
+        node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 50}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
 
 
@@ -182,7 +182,7 @@ def train(args):
     if args.add_loss == "isolate":
         iso_loss = IsolateLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
         iso_loss.train()
-        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
+        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.001)
 
     if args.add_loss == "multicenter_isolate":
         centers = torch.randn((3, args.enc_dim)) * 10
@@ -345,6 +345,8 @@ def train(args):
                         desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
                     v.set_description(desc_str)
             valLoss = np.nanmean(devlossDict[key])
+            if args.add_loss == "isolate":
+                print("isolate center: ", iso_loss.center.data)
 
             if valLoss < prev_loss:
                 # Save the model checkpoint
@@ -372,6 +374,8 @@ def train(args):
                 early_stop_cnt += 1
 
             if early_stop_cnt == 6:
+                with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
+                    res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 5))
                 break
             # if early_stop_cnt == 1:
             #     torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')
@@ -438,10 +442,10 @@ def test(args, model, loss_model, part='eval'):
 if __name__ == "__main__":
     args = initParams()
     if not args.test_only:
-        _, loss_model = train(args)
+        _, _ = train(args)
     model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
-    if args.test_only:
-        loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+    # if args.test_only:
+    loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
     TReer_cm, TRmin_tDCF = test(args, model, loss_model, "train")
     VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
     TEeer_cm, TEmin_tDCF = test(args, model, loss_model)

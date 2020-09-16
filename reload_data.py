@@ -87,17 +87,17 @@ def reload_wavform(path_to_audio, path_to_features, part):
         
 
 if __name__ == "__main__":
-    # reload_data(path_to_features, 'train')
-    # reload_data(path_to_features, 'dev')
-    # reload_data(path_to_features, 'eval')
+    reload_data(path_to_features, 'train')
+    reload_data(path_to_features, 'dev')
+    reload_data(path_to_features, 'eval')
     # with open(path_to_features + 'trainCQCCFeatureMat.pkl', 'rb') as handle:
     #     b = pickle.load(handle)
     #     print(b)
-    for part in ["train", "dev", "eval"]:
+    # for part in ["train", "dev", "eval"]:
         # reload_mfcc(path_to_audio, path_to_features, part)
         # reload_cqt(path_to_audio, path_to_features, part)
         # reload_stft(path_to_audio, path_to_features, part)
-        reload_melspec(path_to_audio, path_to_features, part)
+        # reload_melspec(path_to_audio, path_to_features, part)
         # reload_wavform(path_to_audio, path_to_features, part)
     # reload_melspec(path_to_audio, path_to_features, "eval")
 
