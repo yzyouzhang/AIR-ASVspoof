@@ -221,7 +221,7 @@ def train(args):
     if args.add_loss == "isolate":
         iso_loss = IsolateLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
         iso_loss.train()
-        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.001)
+        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
     if args.add_loss == "multicenter_isolate":
         centers = torch.randn((3, args.enc_dim)) * 10

@@ -255,10 +255,9 @@ def train(args):
                 if (i + 1) % args.accumulate_step == 0:
                     cqcc_optimizer.step()
                     cqcc_optimizer.zero_grad()
-
-                # genuine_feats.append(feats[labels==0])
-                # ip1_loader.append(feats)
-                # idx_loader.append((labels))
+                    centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
+                    multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real,
+                                                                  r_fake=args.r_fake).to(args.device)
 
                 desc_str = ''
                 for key in sorted(trainlossDict.keys()):
