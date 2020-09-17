@@ -133,15 +133,16 @@ class MultiCenterIsolateLoss(nn.Module):
 
     def forward(self, x, labels):
         num_centers = self.centers.shape[0]
-        genuine_data = x[labels==0].repeat(num_centers, 1, 1).transpose(0,1)
-        dist = torch.norm((genuine_data - self.centers.unsqueeze(0)), p=2, dim=2)
+        genuine_data = x[labels == 0].repeat(num_centers, 1, 1).transpose(0,1)
+        genuine_dist = torch.norm((genuine_data - self.centers.unsqueeze(0)), p=2, dim=2)
         try:
-            min_dist_values, indices = torch.min(dist, dim=1)
-            loss = F.relu(min_dist_values - self.r_real).mean()
+            min_genuine_dist_values, indices = torch.min(genuine_dist, dim=1)
+            loss = F.relu(min_genuine_dist_values - self.r_real).mean()
         except:
             loss = 0
-        for i in range(self.centers.shape[0]):
-            loss += F.relu(self.r_fake - torch.norm(x[labels==1]-self.centers[i], p=2, dim=1)).mean() / self.centers.shape[0]
+        spoofing_data = x[labels == 1].repeat(num_centers, 1, 1).transpose(0, 1)
+        spoofing_dist = torch.norm((spoofing_data - self.centers.unsqueeze(0)), p=2, dim=2)
+        loss += F.relu(self.r_fake - spoofing_dist).mean()
         return loss
 
 # class MultiIsolateCenterLoss(nn.Module):

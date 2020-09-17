@@ -215,11 +215,11 @@ def train(args):
     feat, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
-    centers = torch.randn((3, args.enc_dim)) * 10
-    centers = centers.to(args.device)
+    # centers = torch.randn((3, args.enc_dim)) * 10
+    # centers = centers.to(args.device)
     if args.pre_train:
         cqcc_model, cqcc_optimizer = pre_train(args, trainDataLoader, cqcc_model, cqcc_optimizer)
-        centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
+    centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
     multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real,
                                                   r_fake=args.r_fake).to(args.device)
 
