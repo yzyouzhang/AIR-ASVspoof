@@ -51,11 +51,10 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--add_loss', type=str, default='isolate',
-                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
+    parser.add_argument('--accumulate_step', type=int, default=1, help="num of steps to update model")
 
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
     parser.add_argument('--visualize', action='store_true', help="feature visualization")
@@ -111,12 +110,14 @@ def initParams():
 def pre_train(args, trainDataLoader, model, model_optimizer):
     trainlossDict = defaultdict(list)
     model.train()
+    feat_loader, label_loader = [], []
     with trange(len(trainDataLoader)) as t:
         for i in t:
             cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.unsqueeze(1).float().to(args.device)
             labels = labels.to(args.device)
             feats, cqcc_outputs = model(cqcc)
+
             if args.prtrn_mthd == "cross_entropy":
                 criterion = nn.CrossEntropyLoss()
                 cqcc_loss = criterion(cqcc_outputs, labels)
@@ -149,11 +150,22 @@ def pre_train(args, trainDataLoader, model, model_optimizer):
             #     cqcc_optimizer.step()
             #     iso_optimzer.step()
 
-
             desc_str = ''
             for key in sorted(trainlossDict.keys()):
                 desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
             t.set_description(desc_str)
+
+    model.eval()
+    with torch.no_grad():
+        for i, (feat, _, tags, labels) in enumerate(trainDataLoader):
+            feat = feat.unsqueeze(1).float().to(args.device)
+            new_feats, _ = model(feat)
+            feat_loader.append(new_feats)
+            label_loader.append(labels)
+    feats = torch.cat(feat_loader, 0)
+    labels = torch.cat(label_loader, 0)
+    visualize(args, feats.data.cpu().numpy(), labels.data.cpu().numpy(), 0)
+    model.train()
 
     return model, model_optimizer
 
@@ -203,105 +215,67 @@ def train(args):
     feat, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
-    if args.add_loss == "center":
-        centerLoss = CenterLoss(2, args.enc_dim).to(args.device)
-        centerLoss.train()
-        center_optimzer = torch.optim.SGD(centerLoss.parameters(), lr=0.5)
-
-    if args.add_loss == "isolate":
-        iso_loss = IsolateLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
-        iso_loss.train()
-        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.001)
-
-    if args.add_loss == "multicenter_isolate":
-        centers = torch.randn((3, args.enc_dim)) * 10
-        centers = centers.to(args.device)
-        if args.pre_train:
-            cqcc_model, cqcc_optimizer = pre_train(args, trainDataLoader, cqcc_model, cqcc_optimizer)
-            centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
+    centers = torch.randn((3, args.enc_dim)) * 10
+    centers = centers.to(args.device)
+    if args.pre_train:
+        cqcc_model, cqcc_optimizer = pre_train(args, trainDataLoader, cqcc_model, cqcc_optimizer)
+        centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
+    multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real,
+                                                  r_fake=args.r_fake).to(args.device)
 
     early_stop_cnt = 0
     prev_loss = 1e8
 
     for epoch_num in tqdm(range(args.num_epochs)):
-        genuine_feats, ip1_loader, idx_loader = [], [], []
+        ip1_loader, idx_loader = [], []
         cqcc_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
         print('\nEpoch: %d ' % (epoch_num + 1))
+        cqcc_optimizer.zero_grad()
         # with trange(2) as t:
         with trange(len(trainDataLoader)) as t:
             for i in t:
                 cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
-                if args.model == 'rnn':
-                    cqcc = cqcc.transpose(1, 2).float().to(args.device)
-                else:
-                    cqcc = cqcc.unsqueeze(1).float().to(args.device)
-                if not args.enable_tag:
-                    labels = labels.to(args.device)
-                    feats, cqcc_outputs = cqcc_model(cqcc)
-                    cqcc_loss = criterion(cqcc_outputs, labels)
 
-                else:
-                    tags = tags.to(args.device)
-                    feats, cqcc_outputs = cqcc_model(cqcc)
-                    cqcc_loss = criterion(cqcc_outputs, tags)
+                cqcc = cqcc.unsqueeze(1).float().to(args.device)
 
-                # Backward and optimize
-                if args.add_loss == None:
-                    cqcc_optimizer.zero_grad()
-                    trainlossDict["feat_loss"].append(cqcc_loss.item())
-                    cqcc_loss.backward()
+                labels = labels.to(args.device)
+                feats, cqcc_outputs = cqcc_model(cqcc)
+                cqcc_loss = criterion(cqcc_outputs, labels)
+
+                trainlossDict["feat"].append(cqcc_loss.item())
+                multiisoloss = multicenter_iso_loss(feats, labels)
+                cqcc_loss = multiisoloss * args.weight_loss
+                # cqcc_optimizer.zero_grad()
+                trainlossDict["multiiso"].append(multiisoloss.item())
+                cqcc_loss.backward()
+                # cqcc_optimizer.step()
+
+                if (i + 1) % args.accumulate_step == 0:
                     cqcc_optimizer.step()
-
-                if args.add_loss == "center":
-                    centerloss = centerLoss(feats, labels)
-                    trainlossDict["feat"].append(cqcc_loss.item())
-                    cqcc_loss += centerloss * args.weight_loss
                     cqcc_optimizer.zero_grad()
-                    center_optimzer.zero_grad()
-                    trainlossDict["center"].append(centerloss.item())
-                    cqcc_loss.backward()
-                    cqcc_optimizer.step()
-                    # for param in centerLoss.parameters():
-                    #     param.grad.data *= (1. / args.weight_loss)
-                    center_optimzer.step()
-
-                if args.add_loss == "isolate":
-                    isoloss = iso_loss(feats, labels)
-                    trainlossDict["feat"].append(cqcc_loss.item())
-                    cqcc_loss = isoloss * args.weight_loss
-                    cqcc_optimizer.zero_grad()
-                    iso_optimzer.zero_grad()
-                    trainlossDict["iso"].append(isoloss.item())
-                    cqcc_loss.backward()
-                    cqcc_optimizer.step()
-                    iso_optimzer.step()
-
-                if args.add_loss == "multicenter_isolate":
-                    multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(
-                        args.device)
-                    trainlossDict["feat"].append(cqcc_loss.item())
-                    multiisoloss = multicenter_iso_loss(feats, labels)
-                    cqcc_loss = multiisoloss * args.weight_loss
-                    cqcc_optimizer.zero_grad()
-                    trainlossDict["multiiso"].append(multiisoloss.item())
-                    cqcc_loss.backward()
-                    cqcc_optimizer.step()
 
                 # genuine_feats.append(feats[labels==0])
-                ip1_loader.append(feats)
-                idx_loader.append((labels))
+                # ip1_loader.append(feats)
+                # idx_loader.append((labels))
 
                 desc_str = ''
                 for key in sorted(trainlossDict.keys()):
                     desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
                 t.set_description(desc_str)
 
-        if args.add_loss == "multicenter_isolate":
-            centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
-
+        # update center and loss_fn (before validation or after?)
+        centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
+        multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real,
+                                                      r_fake=args.r_fake).to(args.device)
         if args.visualize:
+            with torch.no_grad():
+                for i, (feat, _, tags, labels) in enumerate(trainDataLoader):
+                    feat = feat.unsqueeze(1).float().to(args.device)
+                    new_feats, _ = cqcc_model(feat)
+                    ip1_loader.append(new_feats)
+                    idx_loader.append(labels)
             feat = torch.cat(ip1_loader, 0)
             labels = torch.cat(idx_loader, 0)
             visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), epoch_num+1)
@@ -322,55 +296,23 @@ def train(args):
                     feats, cqcc_outputs = cqcc_model(cqcc)
                     cqcc_loss = criterion(cqcc_outputs, labels)
 
-                    if args.add_loss in [None, "center", "lgcl"]:
-                        devlossDict["feat_loss"].append(cqcc_loss.item())
-                        # _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
-                        # total += labels.size(0)
-                        # cqcc_correct += (cqcc_predicted == labels).sum().item()
-                    elif args.add_loss == "lgm":
-                        devlossDict["feat_loss"].append(cqcc_loss.item())
-                        # outputs, moutputs, likelihood = lgm_loss(feats, labels)
-                        # _, cqcc_predicted = torch.max(outputs.data, 1)
-                        # total += labels.size(0)
-                        # cqcc_correct += (cqcc_predicted == labels).sum().item()
-                    elif args.add_loss == "isolate":
-                        isoloss = iso_loss(feats, labels)
-                        devlossDict["iso_loss"].append(isoloss.item())
-                    elif args.add_loss == "multicenter_isolate":
-                        multiisoloss = multicenter_iso_loss(feats, labels)
-                        devlossDict["multiiso"].append(multiisoloss.item())
-                    # if (k+1) % 10 == 0:
-                    #     print('Epoch [{}/{}], Step [{}/{}], cqcc_accuracy {:.4f} %'.format(
-                    #         epoch_num + 1, args.num_epochs, k + 1, len(valDataLoader), (100 * cqcc_correct / total)))
+                    multiisoloss = multicenter_iso_loss(feats, labels)
+                    devlossDict["multiiso"].append(multiisoloss.item())
 
                     desc_str = ''
                     for key in sorted(devlossDict.keys()):
                         desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
                     v.set_description(desc_str)
             valLoss = np.nanmean(devlossDict[key])
-            if args.add_loss == "isolate":
-                print("isolate center: ", iso_loss.center.data)
+
+            # print("multi isolate centers: ", multicenter_iso_loss.centers.data)
 
             if valLoss < prev_loss:
                 # Save the model checkpoint
                 torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
-                if args.add_loss == "center":
-                    loss_model = centerLoss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "isolate":
-                    loss_model = iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "multicenter_isolate":
-                    loss_model = multicenter_iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "lgm":
-                    loss_model = lgm_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "lgcl":
-                    loss_model = lgcl_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                else:
-                    loss_model = None
+                loss_model = multicenter_iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+
                 prev_loss = valLoss
                 early_stop_cnt = 0
             else:
@@ -404,39 +346,21 @@ def test(args, model, loss_model, part='eval'):
             feats, cqcc_outputs = model(cqcc)
             labels = labels.to(args.device)
 
-            if args.add_loss in [None, "center", "isolate", "multicenter_isolate"]:
-                _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
-                total += labels.size(0)
-                cqcc_correct += (cqcc_predicted == labels).sum().item()
-            elif args.add_loss == "lgm":
-                cqcc_outputs, moutputs, likelihood = loss_model(feats, labels)
-                _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
-                total += labels.size(0)
-                cqcc_correct += (cqcc_predicted == labels).sum().item()
-            elif args.add_loss == "lgcl":
-                cqcc_outputs, moutputs = loss_model(feats, labels)
-                _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
-                total += labels.size(0)
-                cqcc_correct += (cqcc_predicted == labels).sum().item()
+            _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
+            total += labels.size(0)
+            cqcc_correct += (cqcc_predicted == labels).sum().item()
 
             if (i + 1) % 20 == 0:
                 print('Step [{}/{}] '.format(i + 1, len(testDataLoader)))
                 print('Test Accuracy of the model on the eval features: {} %'.format(100 * cqcc_correct / total))
             for j in range(labels.size(0)):
-                if args.add_loss == "isolate":
-                    score = torch.norm(feats[j].unsqueeze(0) - loss_model.center, p=2, dim=1).data.item()
-                elif args.add_loss == "multicenter_isolate":
-                    score = 1e8
-                    for k in range(loss_model.centers.shape[0]):
-                        dist = torch.norm(feats[j] - loss_model.centers[k].unsqueeze(0), p=2, dim=1)
-                        if dist.item() < score:
-                            score = dist.item()
-                else:
-                    score = cqcc_outputs.data[j][0].cpu().numpy()
+                score = 1e8
+                for k in range(loss_model.centers.shape[0]):
+                    dist = torch.norm(feats[j] - loss_model.centers[k].unsqueeze(0), p=2, dim=1)
+                    if dist.item() < score:
+                        score = dist.item()
                 cm_score_file.write(
-                    '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
-                                          "spoof" if labels[j].data.cpu().numpy() else "bonafide",
-                                          score))
+                    '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data, "spoof" if labels[j].data.cpu().numpy() else "bonafide", score))
     eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(args.out_fold, 'cm_score.txt'), args)
 
     return eer_cm, min_tDCF

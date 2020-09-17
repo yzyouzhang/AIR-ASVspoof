@@ -154,7 +154,6 @@ def pre_train(args, trainDataLoader, model, model_optimizer):
             for key in sorted(trainlossDict.keys()):
                 desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
             t.set_description(desc_str)
-    visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), epoch_num + 1)
 
     return model, model_optimizer
 
