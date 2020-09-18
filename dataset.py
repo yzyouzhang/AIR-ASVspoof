@@ -5,6 +5,8 @@ from torch.utils.data import Dataset, DataLoader
 import scipy.io as sio
 import pickle
 import os
+from torch.utils.data.dataloader import default_collate
+import pandas as pd
 
 torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -56,7 +58,8 @@ class ASVspoof2019(Dataset):
         return torch.from_numpy(feat_mat), filename, self.tag[tag], self.label[label]
 
     def collate_fn(self, samples):
-        from torch.utils.data.dataloader import default_collate
+        # return default_collate(samples)
+        # from torch.utils.data.dataloader import default_collate
         if self.pad_chop:
             feat_mat_lst, audio_fn_lst, tag_lst, label_lst = [], [], [], []
             for sample in samples:
@@ -98,6 +101,8 @@ def padding(spec, ref_len):
     assert ref_len > cur_len
     padd_len = ref_len - cur_len
     return torch.cat((spec, torch.zeros(width, padd_len, dtype=spec.dtype)), 1)
+
+# def
 
 
 if __name__ == "__main__":

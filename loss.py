@@ -145,32 +145,41 @@ class MultiCenterIsolateLoss(nn.Module):
         loss += F.relu(self.r_fake - spoofing_dist).mean()
         return loss
 
-# class MultiIsolateCenterLoss(nn.Module):
-#     # This loss should be similar to center loss, learning center by itself
-#     def __init__(self, num_centers, num_classes=10, feat_dim=2, r_real=0.042, r_fake=1.638):
-#         super(MultiCenterIsolateLoss, self).__init__()
-#         self.num_classes = num_classes
-#         self.feat_dim = feat_dim
-#         self.r_real = r_real
-#         self.r_fake = r_fake
-#
-#         self.centers = nn.Parameter(torch.randn(num_centers, self.feat_dim))
-#
-#     def forward(self, x, labels):
-#         total_min_dist = []
-#         for genuine in x[labels==0]:
-#             min_dist = 1e8
-#             for i in range(self.centers.shape[0]):
-#                 dist = torch.norm(genuine-self.centers[i].unsqueeze(0), p=2, dim=1)
-#                 if dist.item() < min_dist:
-#                     min_dist = dist.item()
-#             total_min_dist.append(min_dist)
-#         total_min_dist = torch.Tensor(total_min_dist).cuda()
-#         total_min_dist.requires_grad = True
-#         loss = F.relu(total_min_dist - self.r_real).mean()
-#         for i in range(self.centers.shape[0]):
-#             loss += F.relu(self.r_fake - torch.norm(x[labels==1]-self.centers[i], p=2, dim=1)).mean() / self.centers.shape[0]
-#         return loss
+class MultiIsolateCenterLoss(nn.Module):
+    # This loss should be similar to center loss, learning center by itself
+    def __init__(self, num_centers, r_fake=1.638):
+        super(MultiIsolateCenterLoss, self).__init__()
+        self.num_centers = num_centers
+        self.r_real = nn.Parameter(torch.randn(1))
+        self.r_fake = r_fake
+        self.priors = nn.Parameter(torch.randn(num_centers))
+        self.centers = nn.Parameter(torch.randn(num_centers, self.feat_dim))
+
+    def forward(self, x, labels):
+        genuine_data = x[labels == 0].repeat(self.num_centers, 1, 1).transpose(0, 1)
+        genuine_dist = torch.norm((genuine_data - self.centers.unsqueeze(0)), p=2, dim=2) * self.priors
+        try:
+            min_genuine_dist_values, indices = torch.min(genuine_dist, dim=1)
+            loss = F.relu(min_genuine_dist_values - self.r_real).mean()
+        except:
+            loss = 0
+        spoofing_data = x[labels == 1].repeat(num_centers, 1, 1).transpose(0, 1)
+        spoofing_dist = torch.norm((spoofing_data - self.centers.unsqueeze(0)), p=2, dim=2)
+        loss += F.relu(self.r_fake - spoofing_dist).mean()
+        # total_min_dist = []
+        # for genuine in x[labels==0]:
+        #     min_dist = 1e8
+        #     for i in range(self.centers.shape[0]):
+        #         dist = torch.norm(genuine-self.centers[i].unsqueeze(0), p=2, dim=1)
+        #         if dist.item() < min_dist:
+        #             min_dist = dist.item()
+        #     total_min_dist.append(min_dist)
+        # total_min_dist = torch.Tensor(total_min_dist).cuda()
+        # total_min_dist.requires_grad = True
+        # loss = F.relu(total_min_dist - self.r_real).mean()
+        # for i in range(self.centers.shape[0]):
+        #     loss += F.relu(self.r_fake - torch.norm(x[labels==1]-self.centers[i], p=2, dim=1)).mean() / self.centers.shape[0]
+        return loss
 
 class LGMLoss_v0(nn.Module):
     """

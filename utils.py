@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 import torch
+import numpy as np
 
 def visualize(args, feat, labels, epoch):
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), sharex='col', sharey='col')
@@ -48,6 +49,17 @@ def read_args_json(model_path):
         y = "".join(content[-5:])
         a, b, c, d, e, f = [float(res) for res in re.findall("0\.\d+", y)]
     return args, (a, b, c, d, e, f)
+
+def plot_loss(args):
+    log_file = os.path.join(args.out_fold, "loss.log")
+    with open(log_file, "r") as log:
+        x = np.array([[float(i) for i in line[:-1].split('\t')] for line in log.readlines()])
+        fig, (ax1, ax2) = plt.subplots(1,2, figsize=(10, 4))
+        ax1.plot(x[:, 1])
+        ax1.set_title("Discriminator Loss")
+        ax2.plot(abs(x[:, 2]))
+        ax2.set_title("Generator Loss")
+    return fig
 
 def create_new_split(df_train, df_dev, split_dict):
     for split_key in split_dict:

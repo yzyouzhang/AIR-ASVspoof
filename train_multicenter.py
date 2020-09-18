@@ -105,6 +105,11 @@ def initParams():
     if int(args.gpu) == 5:
         args.device = torch.device("cpu")
 
+    with open(os.path.join(args.out_fold, 'train_loss.log'), 'w') as file:
+        file.write("Start recording training loss ...")
+    with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
+        file.write("Start recording validation loss ...")
+
     return args
 
 def pre_train(args, trainDataLoader, model, model_optimizer):
@@ -264,6 +269,9 @@ def train(args):
                     desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
                 t.set_description(desc_str)
 
+                with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
+                    log.write(str(epoch_num) + "\t" + str(i) + "\t" + str(np.nanmean(trainlossDict[key])))
+
         # update center and loss_fn (before validation or after?)
         centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model).to(args.device)
         multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real,
@@ -302,6 +310,10 @@ def train(args):
                     for key in sorted(devlossDict.keys()):
                         desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
                     v.set_description(desc_str)
+
+                with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
+                    log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])))
+
             valLoss = np.nanmean(devlossDict[key])
 
             # print("multi isolate centers: ", multicenter_iso_loss.centers.data)
