@@ -30,6 +30,10 @@ class ASVspoof2019(Dataset):
                       "A19": 19}
         self.label = {"spoof": 1, "bonafide": 0}
 
+        # would not work if change data split
+        # TODO: add something if change data split
+        self.csv = pd.read_csv(self.ptf + "Set_csv.csv")
+
         with open(protocol, 'r') as f:
             audio_info = [info.strip().split() for info in f.readlines()]
             if genuine_only:
@@ -54,6 +58,11 @@ class ASVspoof2019(Dataset):
                 return res
             with open(os.path.join(self.path_to_features, the_other(self.part)) + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
                 feat_mat = pickle.load(feature_handle)
+
+        this_feat_len = self.csv.at[idx, "feat_len"]
+        if this_feat_len > 400:
+            startp = np.random.randint(this_feat_len-400)
+            feat_mat = feat_mat[:, startp:startp+400]
 
         return torch.from_numpy(feat_mat), filename, self.tag[tag], self.label[label]
 
@@ -109,7 +118,7 @@ if __name__ == "__main__":
     path_to_database = '/data/neil/DS_10283_3336/'  # if run on GPU
     path_to_features = '/dataNVME/neil/ASVspoof2019Features/'  # if run on GPU
     path_to_protocol = '/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/'
-    training_set = ASVspoof2019(path_to_database, path_to_features, path_to_protocol, genuine_only=False, pad_chop=True, feature='Melspec', feat_len=320)
+    training_set = ASVspoof2019(path_to_database, path_to_features, path_to_protocol, genuine_only=False, pad_chop=False, feature='Melspec', feat_len=320)
     feat_mat, audio_fn, tag, label = training_set[2999]
     print(len(training_set))
     print(audio_fn)

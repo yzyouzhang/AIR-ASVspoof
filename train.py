@@ -44,6 +44,9 @@ def initParams():
     parser.add_argument('--num_epochs', type=int, default=80, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=32, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
+    parser.add_argument('--lr_decay', type=float, default=0.8, help="decay learning rate")
+    parser.add_argument('--interval', type=int, default=10, help="interval to decay lr")
+
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
     parser.add_argument('--beta_2', type=float, default=0.999, help="beta_2 for Adam")
     parser.add_argument('--eps', type=float, default=1e-8, help="epsilon for Adam")
@@ -106,11 +109,16 @@ def initParams():
         args.device = torch.device("cpu")
 
     with open(os.path.join(args.out_fold, 'train_loss.log'), 'w') as file:
-        file.write("Start recording training loss ...")
+        file.write("Start recording training loss ...\n")
     with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
-        file.write("Start recording validation loss ...")
+        file.write("Start recording validation loss ...\n")
 
     return args
+
+def adjust_learning_rate(args, optimizer, epoch_num):
+    lr = args.lr * (args.lr_decay ** (epoch_num // args.interval))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 def pre_train(args, trainDataLoader, model, model_optimizer):
     trainlossDict = defaultdict(list)
@@ -243,6 +251,7 @@ def train(args):
         cqcc_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
+        adjust_learning_rate(args, cqcc_optimizer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         # with trange(2) as t:
         with trange(len(trainDataLoader)) as t:
