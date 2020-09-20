@@ -30,9 +30,9 @@ class ASVspoof2019(Dataset):
                       "A19": 19}
         self.label = {"spoof": 1, "bonafide": 0}
 
-        # would not work if change data split
-        # TODO: add something if change data split
-        self.csv = pd.read_csv(self.ptf + "Set_csv.csv")
+        # # would not work if change data split
+        # # TODO: add something if change data split
+        # self.csv = pd.read_csv(self.ptf + "Set_csv.csv")
 
         with open(protocol, 'r') as f:
             audio_info = [info.strip().split() for info in f.readlines()]
@@ -59,10 +59,11 @@ class ASVspoof2019(Dataset):
             with open(os.path.join(self.path_to_features, the_other(self.part)) + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
                 feat_mat = pickle.load(feature_handle)
 
-        this_feat_len = self.csv.at[idx, "feat_len"]
-        if this_feat_len > 400:
-            startp = np.random.randint(this_feat_len-400)
-            feat_mat = feat_mat[:, startp:startp+400]
+        this_feat_len = feat_mat.shape[1]
+        # assert self.csv.at[idx, "feat_len"] == feat_mat.shape[1]
+        if this_feat_len > self.feat_len:
+            startp = np.random.randint(this_feat_len-self.feat_len)
+            feat_mat = feat_mat[:, startp:startp+self.feat_len]
 
         return torch.from_numpy(feat_mat), filename, self.tag[tag], self.label[label]
 

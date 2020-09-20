@@ -102,16 +102,16 @@ def initParams():
         with open(os.path.join(args.out_fold, 'args.json'), 'w') as file:
             file.write(json.dumps(vars(args), sort_keys=True, separators=('\n', ':')))
 
+        with open(os.path.join(args.out_fold, 'train_loss.log'), 'w') as file:
+            file.write("Start recording training loss ...\n")
+        with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
+            file.write("Start recording validation loss ...\n")
+
     args.cuda = torch.cuda.is_available()
     print('Cuda device available: ', args.cuda)
     args.device = torch.device("cuda" if args.cuda else "cpu")
     if int(args.gpu) == 5:
         args.device = torch.device("cpu")
-
-    with open(os.path.join(args.out_fold, 'train_loss.log'), 'w') as file:
-        file.write("Start recording training loss ...\n")
-    with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
-        file.write("Start recording validation loss ...\n")
 
     return args
 
@@ -356,7 +356,7 @@ def train(args):
         if args.visualize:
             feat = torch.cat(ip1_loader, 0)
             labels = torch.cat(idx_loader, 0)
-            visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), epoch_num+1)
+            visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), iso_loss.center.data.cpu().numpy(), epoch_num+1)
 
         # Val the model
         # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
@@ -452,6 +452,19 @@ def test(args, model, loss_model, part='eval'):
     cqcc_correct = 0
     total = 0
     with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:
+    #     for i in trange(len(test_set)):
+    #         score_lst = []
+    #         for j in range(5):
+    #             feat, audio_fn, tags, labels = test_set[i]
+    #             feat = feat.unsqueeze(0).unsqueeze(0).float().to(args.device)
+    #             feats, _ = model(feat)
+    #             # print(torch.norm(feats - loss_model.center, p=2, dim=1).item())
+    #             score_lst.append(torch.norm(feats - loss_model.center, p=2, dim=1).item())
+    #         score = np.mean(score_lst)
+    #         cm_score_file.write('%s A%02d %s %s\n' % (audio_fn, tags,
+    #                                               "spoof" if labels else "bonafide",
+    #                                               score))
+
         for i, (cqcc, audio_fn, tags, labels) in enumerate(testDataLoader):
             if args.model == 'rnn':
                 cqcc = cqcc.transpose(1, 2).float().to(args.device)
@@ -477,7 +490,7 @@ def test(args, model, loss_model, part='eval'):
 
             if (i + 1) % 20 == 0:
                 print('Step [{}/{}] '.format(i + 1, len(testDataLoader)))
-                print('Test Accuracy of the model on the eval features: {} %'.format(100 * cqcc_correct / total))
+                # print('Test Accuracy of the model on the eval features: {} %'.format(100 * cqcc_correct / total))
             for j in range(labels.size(0)):
                 if args.add_loss == "isolate":
                     score = torch.norm(feats[j].unsqueeze(0) - loss_model.center, p=2, dim=1).data.item()
@@ -505,10 +518,11 @@ if __name__ == "__main__":
     model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
     # if args.test_only:
     loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-    TReer_cm, TRmin_tDCF = test(args, model, loss_model, "train")
-    VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
+    # TReer_cm, TRmin_tDCF = test(args, model, loss_model, "train")
+    # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
     TEeer_cm, TEmin_tDCF = test(args, model, loss_model)
     with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
-        res_file.write('\nTrain EER: %8.5f min-tDCF: %8.5f\n' % (TReer_cm, TRmin_tDCF))
-        res_file.write('\nVal EER: %8.5f min-tDCF: %8.5f\n' % (VAeer_cm, VAmin_tDCF))
+        # res_file.write('\nTrain EER: %8.5f min-tDCF: %8.5f\n' % (TReer_cm, TRmin_tDCF))
+        # res_file.write('\nVal EER: %8.5f min-tDCF: %8.5f\n' % (VAeer_cm, VAmin_tDCF))
         res_file.write('\nTest EER: %8.5f min-tDCF: %8.5f\n' % (TEeer_cm, TEmin_tDCF))
+    plot_loss(args)

@@ -6,22 +6,28 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 import torch
 import numpy as np
+from sklearn.manifold import TSNE
 
-def visualize(args, feat, labels, epoch):
+def visualize(args, feat, labels, center, epoch):
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), sharex='col', sharey='col')
     # plt.ion()
     # c = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
     #      '#ff00ff', '#990000', '#999900', '#009900', '#009999']
-    c = ['#ff0000', '#003366']
+    c = ['#ff0000', '#003366', '#999900']
     # plt.clf()
+    if args.enc_dim > 2:
+        from sklearn.manifold import TSNE
+        X = np.concatenate((center, feat), axis=0)
+        X = TSNE(random_state=args.seed).fit_transform(X)
+        center = X[0][np.newaxis, :]
+        feat = X[1:]
     ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
     ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
+    ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
     plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
     ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
     ax3.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=2)
     fig.legend(['genuine', 'spoofing'], loc='upper right')
-    #   plt.xlim(xmin=-5,xmax=5)
-    #   plt.ylim(ymin=-5,ymax=5)
     fig.suptitle("Feature Visualization of Epoch %d" % epoch)
     plt.savefig(os.path.join(args.out_fold, 'vis_loss_epoch=%d.jpg' % epoch))
     plt.show()
@@ -51,14 +57,23 @@ def read_args_json(model_path):
     return args, (a, b, c, d, e, f)
 
 def plot_loss(args):
-    log_file = os.path.join(args.out_fold, "loss.log")
-    with open(log_file, "r") as log:
-        x = np.array([[float(i) for i in line[:-1].split('\t')] for line in log.readlines()])
-        fig, (ax1, ax2) = plt.subplots(1,2, figsize=(10, 4))
-        ax1.plot(x[:, 1])
-        ax1.set_title("Discriminator Loss")
-        ax2.plot(abs(x[:, 2]))
-        ax2.set_title("Generator Loss")
+    train_log_file = os.path.join(args.out_fold, "train_loss.log")
+    dev_log_file = os.path.join(args.out_fold, "dev_loss.log")
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10))
+    with open(train_log_file, "r") as train_log:
+        x = np.array([[float(i) for i in line[0:-1].split('\t')] for line in train_log.readlines()[1:]])
+        ax1.plot(x[:, 2])
+        ax1.set_xticks(np.where(x[:, 1] == 0)[0][::10])
+        ax1.set_xticklabels(np.arange(np.sum(x[:, 1] == 0)) * 10)
+        ax1.set_title("Training Loss")
+    with open(dev_log_file, "r") as dev_log:
+        x = np.array([[float(i) for i in line[0:-1].split('\t')] for line in dev_log.readlines()[1:]])
+        ax2.plot(x[:, 1])
+        ax2.set_title("Validation Loss")
+    plt.savefig(os.path.join(args.out_fold, 'loss_curve.jpg'))
+    plt.show()
+    fig.clf()
+    plt.close(fig)
     return fig
 
 def create_new_split(df_train, df_dev, split_dict):
