@@ -7,29 +7,49 @@ from sklearn.cluster import KMeans
 import torch
 import numpy as np
 from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
 
-def visualize(args, feat, labels, center, epoch):
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), sharex='col', sharey='col')
+def visualize(args, feat, tags, labels, center, epoch, trainOrDev):
+    fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(12, 8))
     # plt.ion()
     # c = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
     #      '#ff00ff', '#990000', '#999900', '#009900', '#009999']
-    c = ['#ff0000', '#003366', '#999900']
+    c = ['#ff0000', '#003366', '#ffff00']
+    c_tag = ['#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#990000', '#999900']
     # plt.clf()
     if args.enc_dim > 2:
-        from sklearn.manifold import TSNE
         X = np.concatenate((center, feat), axis=0)
-        X = TSNE(random_state=args.seed).fit_transform(X)
-        center = X[0][np.newaxis, :]
-        feat = X[1:]
+        X_tsne = TSNE(random_state=args.seed).fit_transform(X)
+        center = X_tsne[0][np.newaxis, :]
+        feat = X_tsne[1:]
+        X_pca = PCA(n_components=2).fit_transform(X)
+        center_pca = X_pca[0][np.newaxis, :]
+        feat_pca = X_pca[1:]
+    else:
+        center_pca = center
+        feat_pca = feat
+    # t-SNE visualization
     ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
     ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
     ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
     plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
     ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
-    ax3.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=2)
-    fig.legend(['genuine', 'spoofing'], loc='upper right')
-    fig.suptitle("Feature Visualization of Epoch %d" % epoch)
-    plt.savefig(os.path.join(args.out_fold, 'vis_loss_epoch=%d.jpg' % epoch))
+    for i in range(1, 7):
+        ax3.plot(feat[tags == i, 0], feat[tags == i, 1], '.', c=c_tag[i-1], markersize=2)
+    ax3.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06'])
+    ax1.legend(['genuine', 'spoofing', 'center'])
+    # PCA visualization
+    ax4.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=1)
+    ax4.plot(feat_pca[labels == 1, 0], feat_pca[labels == 1, 1], '.', c=c[1], markersize=1)
+    ax4.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
+    plt.setp((ax5, ax6), xlim=ax4.get_xlim(), ylim=ax4.get_ylim())
+    ax5.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=2)
+    for i in range(1, 7):
+        ax6.plot(feat_pca[tags == i, 0], feat_pca[tags == i, 1], '.', c=c_tag[i - 1], markersize=2)
+    ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06'])
+    ax4.legend(['genuine', 'spoofing', 'center'])
+    fig.suptitle("Feature Visualization of Epoch %d, %s" % (epoch, trainOrDev))
+    plt.savefig(os.path.join(args.out_fold, trainOrDev + '_vis_feat_epoch=%d.jpg' % epoch))
     plt.show()
     fig.clf()
     plt.close(fig)

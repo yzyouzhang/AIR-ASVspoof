@@ -41,7 +41,7 @@ def initParams():
                         choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'], default='cnn')
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=80, help="Number of epochs for training")
+    parser.add_argument('--num_epochs', type=int, default=100, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=32, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.8, help="decay learning rate")
@@ -62,6 +62,7 @@ def initParams():
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
     parser.add_argument('--visualize', action='store_true', help="feature visualization")
     parser.add_argument('--test_only', action='store_true', help="test the trained model in case the test crash sometimes or another test method")
+    parser.add_argument('--continue_training', action='store_true', help="continue training with trained model")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
     parser.add_argument('--prtrn_mthd', type=str, default='cross_entropy',
@@ -77,7 +78,7 @@ def initParams():
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    if args.test_only:
+    if args.test_only or args.continue_training:
         pass
     else:
         # Path for output data
@@ -138,31 +139,6 @@ def pre_train(args, trainDataLoader, model, model_optimizer):
                 cqcc_loss.backward()
                 model_optimizer.step()
 
-            # if pretrain_method == "center":
-            #     centerloss = centerLoss(feats, labels)
-            #     trainlossDict["feat"].append(cqcc_loss.item())
-            #     cqcc_loss += centerloss * args.weight_loss
-            #     cqcc_optimizer.zero_grad()
-            #     center_optimzer.zero_grad()
-            #     trainlossDict["center"].append(centerloss.item())
-            #     cqcc_loss.backward()
-            #     cqcc_optimizer.step()
-            #     # for param in centerLoss.parameters():
-            #     #     param.grad.data *= (1. / args.weight_loss)
-            #     center_optimzer.step()
-            #
-            # if pretrain_method == "isolate":
-            #     isoloss = iso_loss(feats, labels)
-            #     trainlossDict["feat"].append(cqcc_loss.item())
-            #     cqcc_loss = isoloss * args.weight_loss
-            #     cqcc_optimizer.zero_grad()
-            #     iso_optimzer.zero_grad()
-            #     trainlossDict["iso"].append(isoloss.item())
-            #     cqcc_loss.backward()
-            #     cqcc_optimizer.step()
-            #     iso_optimzer.step()
-
-
             desc_str = ''
             for key in sorted(trainlossDict.keys()):
                 desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
@@ -176,10 +152,6 @@ def train(args):
 
     # initialize model
     if args.model == 'cnn':
-        # node_dict = {"CQCC": 128, "CQT": 256, "LFCC": 128, "MFCC": 256, "Melspec": 90}
-        # cqcc_model = model_.CQCC_ConvNet(2, int(args.feat_len / 100 * node_dict[args.feat])).to(args.device)
-        # node_dict = {"CQCC": 67840, "Melspec": 101760, "CQT": 156032, "STFT": 210304}
-        # cqcc_model = model_.CQCC_ConvNet(2, node_dict[args.feat], subband_attention=False).to(args.device)
         node_dict = {"CQCC": 10, "Melspec": 15, "CQT": 156032, "STFT": 210304}
         cqcc_model = model_.CQCC_ConvNet(2, node_dict[args.feat], subband_attention=True).to(args.device)
     elif args.model == 'tdnn':
@@ -194,6 +166,9 @@ def train(args):
     elif args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 50}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
+
+    if args.continue_training:
+        cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -233,6 +208,8 @@ def train(args):
 
     if args.add_loss == "isolate":
         iso_loss = IsolateLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
+        if args.continue_training:
+            iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
         iso_loss.train()
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
@@ -247,7 +224,7 @@ def train(args):
     prev_loss = 1e8
 
     for epoch_num in tqdm(range(args.num_epochs)):
-        genuine_feats, ip1_loader, idx_loader = [], [], []
+        genuine_feats, ip1_loader, tag_loader, idx_loader = [], [], [], []
         cqcc_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
@@ -257,19 +234,11 @@ def train(args):
         with trange(len(trainDataLoader)) as t:
             for i in t:
                 cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
-                if args.model == 'rnn':
-                    cqcc = cqcc.transpose(1, 2).float().to(args.device)
-                else:
-                    cqcc = cqcc.unsqueeze(1).float().to(args.device)
-                if not args.enable_tag:
-                    labels = labels.to(args.device)
-                    feats, cqcc_outputs = cqcc_model(cqcc)
-                    cqcc_loss = criterion(cqcc_outputs, labels)
-
-                else:
-                    tags = tags.to(args.device)
-                    feats, cqcc_outputs = cqcc_model(cqcc)
-                    cqcc_loss = criterion(cqcc_outputs, tags)
+                cqcc = cqcc.unsqueeze(1).float().to(args.device)
+                tags = tags.to(args.device)
+                labels = labels.to(args.device)
+                feats, cqcc_outputs = cqcc_model(cqcc)
+                cqcc_loss = criterion(cqcc_outputs, labels)
 
                 # Backward and optimize
                 if args.add_loss == None:
@@ -341,6 +310,7 @@ def train(args):
                 # genuine_feats.append(feats[labels==0])
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
+                tag_loader.append((tags))
 
                 desc_str = ''
                 for key in sorted(trainlossDict.keys()):
@@ -353,25 +323,32 @@ def train(args):
         if args.add_loss == "multicenter_isolate":
             centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model)
 
-        if args.visualize:
+        if args.visualize and ((epoch_num+1) % 3 == 1):
             feat = torch.cat(ip1_loader, 0)
             labels = torch.cat(idx_loader, 0)
-            visualize(args, feat.data.cpu().numpy(), labels.data.cpu().numpy(), iso_loss.center.data.cpu().numpy(), epoch_num+1)
+            tags = torch.cat(tag_loader, 0)
+            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), iso_loss.center.data.cpu().numpy(),
+                      epoch_num + 1, "Train")
 
         # Val the model
         # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
         cqcc_model.eval()
 
         with torch.no_grad():
+            ip1_loader, tag_loader, idx_loader = [], [], []
+            # with trange(2) as v:
             with trange(len(valDataLoader)) as v:
                 for i in v:
                     cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
-                    if args.model == 'rnn':
-                        cqcc = cqcc.transpose(1, 2).float().to(args.device)
-                    else:
-                        cqcc = cqcc.unsqueeze(1).float().to(args.device)
+                    cqcc = cqcc.unsqueeze(1).float().to(args.device)
+                    tags = tags.to(args.device)
                     labels = labels.to(args.device)
                     feats, cqcc_outputs = cqcc_model(cqcc)
+
+                    ip1_loader.append(feats)
+                    idx_loader.append((labels))
+                    tag_loader.append((tags))
+
                     cqcc_loss = criterion(cqcc_outputs, labels)
 
                     if args.add_loss in [None, "center", "lgcl"]:
@@ -400,12 +377,37 @@ def train(args):
                         desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
                     v.set_description(desc_str)
 
-                with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
-                    log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\n")
+            with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
+                log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\n")
+
+            if args.visualize and ((epoch_num+1) % 3 == 1):
+                feat = torch.cat(ip1_loader, 0)
+                labels = torch.cat(idx_loader, 0)
+                tags = torch.cat(tag_loader, 0)
+                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), iso_loss.center.data.cpu().numpy(),
+                          epoch_num + 1, "Dev")
 
             valLoss = np.nanmean(devlossDict[key])
-            if args.add_loss == "isolate":
-                print("isolate center: ", iso_loss.center.data)
+            # if args.add_loss == "isolate":
+            #     print("isolate center: ", iso_loss.center.data)
+            torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num+1)))
+            if args.add_loss == "center":
+                loss_model = centerLoss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+            elif args.add_loss == "isolate":
+                loss_model = iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+            elif args.add_loss == "multicenter_isolate":
+                loss_model = multicenter_iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+            elif args.add_loss == "lgm":
+                loss_model = lgm_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+            elif args.add_loss == "lgcl":
+                loss_model = lgcl_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+            else:
+                loss_model = None
 
             if valLoss < prev_loss:
                 # Save the model checkpoint
