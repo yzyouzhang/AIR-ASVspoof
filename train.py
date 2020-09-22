@@ -10,7 +10,7 @@ from resnet import ResNet
 from dataset import ASVspoof2019
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
-from loss import CenterLoss, LGMLoss_v0, LMCL_loss, IsolateLoss, MultiCenterIsolateLoss
+from loss import *
 from collections import defaultdict
 from tqdm import tqdm, trange
 from utils import *
@@ -32,13 +32,13 @@ def initParams():
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", required=True,
-                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT"], default='CQCC')
+                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT"], default='Melspec')
     parser.add_argument("--feat_len", type=int, help="features length", default=650)
     parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=16)
 
     parser.add_argument('-m', '--model', help='Model arch', required=True,
-                        choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'], default='cnn')
+                        choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'], default='resnet')
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=100, help="Number of epochs for training")
@@ -54,10 +54,11 @@ def initParams():
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
     parser.add_argument('--add_loss', type=str, default='isolate',
-                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'multicenter_isolate'], help="add other loss for one-class training")
+                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
+    parser.add_argument('--num_centers', type=int, default=3, help="num of centers for multi isolate loss")
 
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
     parser.add_argument('--visualize', action='store_true', help="feature visualization")
@@ -151,19 +152,7 @@ def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
 
     # initialize model
-    if args.model == 'cnn':
-        node_dict = {"CQCC": 10, "Melspec": 15, "CQT": 156032, "STFT": 210304}
-        cqcc_model = model_.CQCC_ConvNet(2, node_dict[args.feat], subband_attention=True).to(args.device)
-    elif args.model == 'tdnn':
-        node_dict = {"CQCC": 90, "CQT": 192, "LFCC": 60, "MFCC": 50}
-        cqcc_model = model_.TDNN_classifier(node_dict[args.feat], 2).to(args.device)
-    elif args.model == 'rnn':
-        node_dict = {"CQCC": 90, "CQT": 192, "LFCC": 60, "MFCC": 50}
-        cqcc_model = model_.RNN(node_dict[args.feat], 512, 2, 2).to(args.device)
-    elif args.model == 'cnn_lstm':
-        node_dict = {"CQCC": 90, "CQT": 192, "LFCC": 60, "MFCC": 50}
-        cqcc_model = model_.CNN_LSTM(nclasses=2).to(args.device)
-    elif args.model == 'resnet':
+    if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 50}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
 
@@ -212,6 +201,13 @@ def train(args):
             iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
         iso_loss.train()
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
+
+    if args.add_loss == "multi_isolate":
+        multi_iso_loss = MultiIsolateCenterLoss(args.enc_dim, args.num_centers, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
+        if args.continue_training:
+            multi_iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
+        multi_iso_loss.train()
+        multi_iso_optimzer = torch.optim.SGD(multi_iso_loss.parameters(), lr=0.01)
 
     if args.add_loss == "multicenter_isolate":
         centers = torch.randn((3, args.enc_dim)) * 10
@@ -271,6 +267,17 @@ def train(args):
                     cqcc_optimizer.step()
                     iso_optimzer.step()
 
+                if args.add_loss == "multi_isolate":
+                    multi_isoloss = multi_iso_loss(feats, labels)
+                    trainlossDict["feat"].append(cqcc_loss.item())
+                    cqcc_loss = multi_isoloss * args.weight_loss
+                    cqcc_optimizer.zero_grad()
+                    multi_iso_optimzer.zero_grad()
+                    trainlossDict["multi_iso"].append(multi_isoloss.item())
+                    cqcc_loss.backward()
+                    cqcc_optimizer.step()
+                    multi_iso_optimzer.step()
+
                 if args.add_loss == "multicenter_isolate":
                     multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(
                         args.device)
@@ -327,7 +334,7 @@ def train(args):
             feat = torch.cat(ip1_loader, 0)
             labels = torch.cat(idx_loader, 0)
             tags = torch.cat(tag_loader, 0)
-            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), iso_loss.center.data.cpu().numpy(),
+            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.center.data.cpu().numpy(),
                       epoch_num + 1, "Train")
 
         # Val the model
@@ -365,6 +372,9 @@ def train(args):
                     elif args.add_loss == "isolate":
                         isoloss = iso_loss(feats, labels)
                         devlossDict["iso_loss"].append(isoloss.item())
+                    elif args.add_loss == "multi_isolate":
+                        multi_isoloss = multi_iso_loss(feats, labels)
+                        devlossDict["multi_iso_loss"].append(multi_isoloss.item())
                     elif args.add_loss == "multicenter_isolate":
                         multiisoloss = multicenter_iso_loss(feats, labels)
                         devlossDict["multiiso"].append(multiisoloss.item())
@@ -384,7 +394,7 @@ def train(args):
                 feat = torch.cat(ip1_loader, 0)
                 labels = torch.cat(idx_loader, 0)
                 tags = torch.cat(tag_loader, 0)
-                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), iso_loss.center.data.cpu().numpy(),
+                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.center.data.cpu().numpy(),
                           epoch_num + 1, "Dev")
 
             valLoss = np.nanmean(devlossDict[key])
@@ -397,6 +407,10 @@ def train(args):
             elif args.add_loss == "isolate":
                 loss_model = iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+            elif args.add_loss == "multi_isolate":
+                loss_model = multi_iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             elif args.add_loss == "multicenter_isolate":
                 loss_model = multicenter_iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
@@ -418,6 +432,10 @@ def train(args):
                 elif args.add_loss == "isolate":
                     loss_model = iso_loss
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+                elif args.add_loss == "multi_isolate":
+                    loss_model = multi_iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
                 elif args.add_loss == "multicenter_isolate":
                     loss_model = multicenter_iso_loss
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
@@ -436,7 +454,7 @@ def train(args):
 
             if early_stop_cnt == 20:
                 with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
-                    res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 5))
+                    res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
                 break
             # if early_stop_cnt == 1:
             #     torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')
@@ -475,7 +493,7 @@ def test(args, model, loss_model, part='eval'):
             feats, cqcc_outputs = model(cqcc)
             labels = labels.to(args.device)
 
-            if args.add_loss in [None, "center", "isolate", "multicenter_isolate"]:
+            if args.add_loss in [None, "center", "isolate", "multi_isolate", "multicenter_isolate"]:
                 _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
                 total += labels.size(0)
                 cqcc_correct += (cqcc_predicted == labels).sum().item()
@@ -496,6 +514,9 @@ def test(args, model, loss_model, part='eval'):
             for j in range(labels.size(0)):
                 if args.add_loss == "isolate":
                     score = torch.norm(feats[j].unsqueeze(0) - loss_model.center, p=2, dim=1).data.item()
+                elif args.add_loss == "multi_isolate":
+                    genuine_dist = torch.norm((feats[j].unsqueeze(0).repeat(args.num_centers, 1) - loss_model.centers), p=2, dim=1)
+                    score, indices = torch.min(genuine_dist, dim=-1)
                 elif args.add_loss == "multicenter_isolate":
                     score = 1e8
                     for k in range(loss_model.centers.shape[0]):

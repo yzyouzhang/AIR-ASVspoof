@@ -17,11 +17,12 @@ def visualize(args, feat, tags, labels, center, epoch, trainOrDev):
     c = ['#ff0000', '#003366', '#ffff00']
     c_tag = ['#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#990000', '#999900']
     # plt.clf()
+    num_centers = center.shape[0]
     if args.enc_dim > 2:
         X = np.concatenate((center, feat), axis=0)
         X_tsne = TSNE(random_state=args.seed).fit_transform(X)
-        center = X_tsne[0][np.newaxis, :]
-        feat = X_tsne[1:]
+        center = X_tsne[:num_centers]
+        feat = X_tsne[num_centers:]
         X_pca = PCA(n_components=2).fit_transform(X)
         center_pca = X_pca[0][np.newaxis, :]
         feat_pca = X_pca[1:]
@@ -120,16 +121,21 @@ def create_new_split(df_train, df_dev, split_dict):
                 else:
                     new_split_dev_file.write('%s %s - %s spoof\n' % (speaker, filename, attack))
 
+def test_checkpoint_model(model_path):
+    pass
+
 
 if __name__ == "__main__":
-    args, (a, b, c, d, e, f) = read_args_json("models/cqt_cnn1")
-    split_dict = {'125_346': ["A01", "A02", "A05"], '135_246': ["A01", "A03", "A05"], '145_236': ["A01", "A04", "A05"],
-                  '235_146': ["A02", "A03", "A05"], '245_136': ["A02", "A04", "A05"], '345_126': ["A03", "A04", "A05"],
-                  '126_345': ["A01", "A02", "A06"], '136_245': ["A01", "A03", "A06"], '146_235': ["A01", "A04", "A06"],
-                  '236_145': ["A02", "A03", "A06"], '246_135': ["A02", "A04", "A06"], '346_125': ["A03", "A04", "A06"]}
-    df_train = pd.read_csv("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm." + "train" + ".trl.txt",
-                     names=["speaker", "filename", "-", "attack", "label"], sep=" ")
-    df_dev = pd.read_csv("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm." + "dev" + ".trl.txt",
-                     names=["speaker", "filename", "-", "attack", "label"], sep=" ")
-    create_new_split(df_train, df_dev, split_dict)
+    # args, (a, b, c, d, e, f) = read_args_json("models/cqt_cnn1")
+    #
+    # split_dict = {'125_346': ["A01", "A02", "A05"], '135_246': ["A01", "A03", "A05"], '145_236': ["A01", "A04", "A05"],
+    #               '235_146': ["A02", "A03", "A05"], '245_136': ["A02", "A04", "A05"], '345_126': ["A03", "A04", "A05"],
+    #               '126_345': ["A01", "A02", "A06"], '136_245': ["A01", "A03", "A06"], '146_235': ["A01", "A04", "A06"],
+    #               '236_145': ["A02", "A03", "A06"], '246_135': ["A02", "A04", "A06"], '346_125': ["A03", "A04", "A06"]}
+    # df_train = pd.read_csv("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm." + "train" + ".trl.txt",
+    #                  names=["speaker", "filename", "-", "attack", "label"], sep=" ")
+    # df_dev = pd.read_csv("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm." + "dev" + ".trl.txt",
+    #                  names=["speaker", "filename", "-", "attack", "label"], sep=" ")
+    # create_new_split(df_train, df_dev, split_dict)
+    test_checkpoint_model(model_path)
 
