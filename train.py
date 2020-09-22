@@ -334,7 +334,7 @@ def train(args):
             feat = torch.cat(ip1_loader, 0)
             labels = torch.cat(idx_loader, 0)
             tags = torch.cat(tag_loader, 0)
-            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.center.data.cpu().numpy(),
+            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.centers.data.cpu().numpy(),
                       epoch_num + 1, "Train")
 
         # Val the model
@@ -394,7 +394,7 @@ def train(args):
                 feat = torch.cat(ip1_loader, 0)
                 labels = torch.cat(idx_loader, 0)
                 tags = torch.cat(tag_loader, 0)
-                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.center.data.cpu().numpy(),
+                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.centers.data.cpu().numpy(),
                           epoch_num + 1, "Dev")
 
             valLoss = np.nanmean(devlossDict[key])

@@ -24,8 +24,8 @@ def visualize(args, feat, tags, labels, center, epoch, trainOrDev):
         center = X_tsne[:num_centers]
         feat = X_tsne[num_centers:]
         X_pca = PCA(n_components=2).fit_transform(X)
-        center_pca = X_pca[0][np.newaxis, :]
-        feat_pca = X_pca[1:]
+        center_pca = X_pca[:num_centers]
+        feat_pca = X_pca[num_centers:]
     else:
         center_pca = center
         feat_pca = feat
