@@ -79,6 +79,32 @@ class CenterlossFunction(Function):
 
         return grad_feature * grad_output, None, grad_centers
 
+class AngularIsoLoss(nn.Module):
+    def __init__(self, feat_dim=2, r_real=0.1, r_fake=0.5, alpha=10.0):
+        super(AngularIsoLoss, self).__init__()
+        self.feat_dim = feat_dim
+        self.r_real = r_real
+        self.r_fake = r_fake
+        self.alpha = alpha
+        self.w = nn.Parameter(torch.randn(self.feat_dim, 1))
+        nn.init.kaiming_uniform_(self.w, 0.25)
+        self.softplus = nn.Softplus()
+
+    def forward(self, x, labels):
+        """
+        Args:
+            x: feature matrix with shape (batch_size, feat_dim).
+            labels: ground truth labels with shape (batch_size).
+        """
+        w = F.normalize(self.w, p=2, dim=0)
+        x = F.normalize(x, p=2, dim=1)
+
+        scores = x @ w
+        scores[labels == 0] = scores[labels == 0] - self.r_real
+        scores[labels == 1] = self.r_fake - scores[labels == 1]
+        loss = self.softplus(torch.logsumexp(self.alpha*scores, dim=0))
+        return loss
+
 class IsolateLoss(nn.Module):
     """Isolate loss.
 
@@ -259,22 +285,30 @@ class LMCL_loss(nn.Module):
 
 
 if __name__ == "__main__":
-    feats = torch.randn((32, 90)).cuda()
-    centers = torch.randn((3,90)).cuda()
-    # o = torch.norm(feats - center, p=2, dim=1)
-    # print(o.shape)
-    # dist = torch.cat((o, o), dim=1)
-    # print(dist.shape)
-    labels = torch.cat((torch.Tensor([0]).repeat(10),
-                       torch.Tensor([1]).repeat(22)),0).cuda()
-    # classes = torch.arange(2).long().cuda()
-    # labels = labels.expand(32, 2)
-    # print(labels)
-    # mask = labels.eq(classes.expand(32, 2))
-    # print(mask)
+    # feats = torch.randn((32, 90)).cuda()
+    # centers = torch.randn((3,90)).cuda()
+    # # o = torch.norm(feats - center, p=2, dim=1)
+    # # print(o.shape)
+    # # dist = torch.cat((o, o), dim=1)
+    # # print(dist.shape)
+    # labels = torch.cat((torch.Tensor([0]).repeat(10),
+    #                    torch.Tensor([1]).repeat(22)),0).cuda()
+    # # classes = torch.arange(2).long().cuda()
+    # # labels = labels.expand(32, 2)
+    # # print(labels)
+    # # mask = labels.eq(classes.expand(32, 2))
+    # # print(mask)
+    #
+    # iso_loss = MultiCenterIsolateLoss(centers, 2, 90).cuda()
+    # loss = iso_loss(feats, labels)
+    # for p in iso_loss.parameters():
+    #     print(p)
+    # # print(loss.shape)
 
-    iso_loss = MultiCenterIsolateLoss(centers, 2, 90).cuda()
-    loss = iso_loss(feats, labels)
-    for p in iso_loss.parameters():
-        print(p)
-    # print(loss.shape)
+    feat_dim = 16
+    feats = torch.randn((32, feat_dim))
+    labels = torch.cat((torch.Tensor([0]).repeat(10),
+                        torch.Tensor([1]).repeat(22)), 0).cuda()
+    aisoloss = AngularIsoLoss(feat_dim=feat_dim)
+    loss = aisoloss(feats, labels)
+    print(loss)
