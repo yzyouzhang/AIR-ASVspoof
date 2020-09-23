@@ -435,7 +435,7 @@ def train(args):
                 elif args.add_loss == "multi_isolate":
                     loss_model = multi_iso_loss
                     torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+                                                        'anti-spoofing_loss_model.pt'))
                 elif args.add_loss == "multicenter_isolate":
                     loss_model = multicenter_iso_loss
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
@@ -517,6 +517,7 @@ def test(args, model, loss_model, part='eval'):
                 elif args.add_loss == "multi_isolate":
                     genuine_dist = torch.norm((feats[j].unsqueeze(0).repeat(args.num_centers, 1) - loss_model.centers), p=2, dim=1)
                     score, indices = torch.min(genuine_dist, dim=-1)
+                    score = score.item()
                 elif args.add_loss == "multicenter_isolate":
                     score = 1e8
                     for k in range(loss_model.centers.shape[0]):
