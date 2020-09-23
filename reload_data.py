@@ -17,16 +17,15 @@ def reload_data(path_to_features, part):
     lfcc_dict = {}
     for i in range(len(matfiles)):
         if matfiles[i][len('/dataNVME/neil/')+len(part)+1:].startswith('CQCC'):
-            cqcc_dict[matfiles[i][len('/dataNVME/neil/') + len(part) + 6:-4]] = sio.loadmat(matfiles[i],
-                                                                                   verify_compressed_data_integrity=False)['x']
+            key = matfiles[i][len('/dataNVME/neil/') + len(part) + 6:-4]
+            cqcc = sio.loadmat(matfiles[i], verify_compressed_data_integrity=False)['x']
+            with open(path_to_features + part +'/'+ key + 'CQCC.pkl', 'wb') as handle1:
+                pickle.dump(cqcc, handle1, protocol=pickle.HIGHEST_PROTOCOL)
         else:
-            lfcc_dict[matfiles[i][len('/dataNVME/neil/') + len(part) + 6:-4]] = sio.loadmat(matfiles[i],
-                                                                                   verify_compressed_data_integrity=False)['x']
-    with open(path_to_features + part + 'CQCCFeatureMat.pkl', 'wb') as handle1:
-        pickle.dump(cqcc_dict, handle1, protocol=pickle.HIGHEST_PROTOCOL)
-    with open(path_to_features + part + 'LFCCFeatureMat.pkl', 'wb') as handle2:
-        pickle.dump(lfcc_dict, handle2, protocol=pickle.HIGHEST_PROTOCOL)
-
+            key = matfiles[i][len('/dataNVME/neil/') + len(part) + 6:-4]
+            lfcc = sio.loadmat(matfiles[i], verify_compressed_data_integrity=False)['x']
+            with open(path_to_features + part +'/'+ key + 'LFCC.pkl', 'wb') as handle2:
+                pickle.dump(lfcc, handle2, protocol=pickle.HIGHEST_PROTOCOL)
 
 def reload_mfcc(path_to_audio, path_to_features, part):
     audiofiles = find_files(path_to_audio + part + '/flac/', ext='flac')
@@ -88,17 +87,17 @@ def reload_wavform(path_to_audio, path_to_features, part):
         
 
 if __name__ == "__main__":
-    # reload_data(path_to_features, 'train')
-    # reload_data(path_to_features, 'dev')
-    # reload_data(path_to_features, 'eval')
+    reload_data(path_to_features, 'train')
+    reload_data(path_to_features, 'dev')
+    reload_data(path_to_features, 'eval')
     # with open(path_to_features + 'trainCQCCFeatureMat.pkl', 'rb') as handle:
     #     b = pickle.load(handle)
     #     print(b)
-    for part in ["train", "dev", "eval"]:
+    # for part in ["train", "dev", "eval"]:
         # reload_mfcc(path_to_audio, path_to_features, part)
         # reload_cqt(path_to_audio, path_to_features, part)
         # reload_stft(path_to_audio, path_to_features, part)
-        reload_melspec(path_to_audio, path_to_features, part)
+        # reload_melspec(path_to_audio, path_to_features, part)
         # reload_wavform(path_to_audio, path_to_features, part)
     # reload_melspec(path_to_audio, path_to_features, "eval")
 

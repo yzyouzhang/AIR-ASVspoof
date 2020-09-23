@@ -223,10 +223,10 @@ class ResNet(nn.Module):
                                bias=False)
         self.bn5 = nn.BatchNorm2d(256)
 
-        self.fc = nn.Linear(256 * 2, 256)
-        self.lbn = nn.BatchNorm1d(256)
+        self.fc = nn.Linear(256 * 2, enc_dim)
+        # self.lbn = nn.BatchNorm1d(256)
 
-        self.fc_feat = nn.Linear(256, enc_dim)
+        # self.fc_feat = nn.Linear(256, enc_dim)
 
         self.fc_mu = nn.Linear(enc_dim, nclasses) if nclasses >= 2 else nn.Linear(enc_dim, 1)
 
@@ -281,103 +281,104 @@ class ResNet(nn.Module):
         stats = self.attention(x.permute(0, 2, 1).contiguous())
         # print(stats.shape)
 
-        fc = F.relu(self.lbn(self.fc(stats)))
-        feat = self.fc_feat(fc)
+        feat = self.fc(stats)
+        # feat = F.relu(self.lbn(self.fc(stats)))
+        # feat = self.fc_feat(feat)
         mu = self.fc_mu(feat)
 
         # embs = torch.div(mu, torch.norm(mu, 2, 1).unsqueeze(1).expand_as(mu))
 
         return feat, mu
 
-class DOC_ResNet(nn.Module):
-    def __init__(self, num_nodes, resnet_type='18', nclasses=-1):
-        self.in_planes = 16
-        super(DOC_ResNet, self).__init__()
-
-        layers, block = RESNET_CONFIGS[resnet_type]
-
-        self._norm_layer = nn.BatchNorm2d
-
-        self.conv1 = nn.Conv2d(1, 16, kernel_size=(9, 3), stride=(3, 1), padding=(1, 1), bias=False)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.activation = nn.ReLU()
-
-        self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-
-        self.conv5 = nn.Conv2d(512 * block.expansion, 256, kernel_size=(num_nodes, 3), stride=(1, 1), padding=(0, 1),
-                               bias=False)
-        self.bn5 = nn.BatchNorm2d(256)
-
-        self.fc = nn.Linear(256 * 2, 256)
-        self.lbn = nn.BatchNorm1d(256)
-
-        self.fc_feat = nn.Linear(256, 2)
-
-        self.fc_mu = nn.Linear(2, nclasses) if nclasses >= 2 else nn.Linear(256, 1)
-
-        self.initialize_params()
-
-        self.attention = SelfAttention(256)
-
-    def initialize_params(self):
-
-        for layer in self.modules():
-            if isinstance(layer, torch.nn.Conv2d):
-                init.kaiming_normal_(layer.weight, a=0, mode='fan_out')
-            elif isinstance(layer, torch.nn.Linear):
-                init.kaiming_uniform_(layer.weight)
-            elif isinstance(layer, torch.nn.BatchNorm2d) or isinstance(layer, torch.nn.BatchNorm1d):
-                layer.weight.data.fill_(1)
-                layer.bias.data.zero_()
-
-    def _make_layer(self, block, planes, num_blocks, stride=1):
-        norm_layer = self._norm_layer
-        downsample = None
-        if stride != 1 or self.in_planes != planes * block.expansion:
-            downsample = nn.Sequential(conv1x1(self.in_planes, planes * block.expansion, stride),
-                                       norm_layer(planes * block.expansion))
-        layers = []
-        layers.append(block(self.in_planes, planes, stride, downsample, 1, 64, 1, norm_layer))
-        self.in_planes = planes * block.expansion
-        for _ in range(1, num_blocks):
-            layers.append(
-                block(self.in_planes, planes, 1, groups=1, base_width=64, dilation=False, norm_layer=norm_layer))
-
-        return nn.Sequential(*layers)
-
-    def forward_once(self, x):
-
-        x = self.conv1(x)
-        x = self.activation(self.bn1(x))
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        # print(x.shape)
-        x = self.conv5(x)
-        x = self.activation(self.bn5(x)).squeeze(2)
-        # print(x.shape)
-
-        stats = self.attention(x.permute(0, 2, 1).contiguous())
-        fc = F.relu(self.lbn(self.fc(stats)))
-        feat = self.fc_feat(fc)
-        mu = self.fc_mu(feat)
-
-        # embs = torch.div(mu, torch.norm(mu, 2, 1).unsqueeze(1).expand_as(mu))
-
-        return feat, mu
-
-    def forward(self, ref, tar):
-        feats_ref, out_ref = self.forward_once(ref)
-        feats_tar, out_tar = self.forward_once(tar)
-
-        return feats_ref, out_ref, feats_tar, out_tar
+# class DOC_ResNet(nn.Module):
+#     def __init__(self, num_nodes, resnet_type='18', nclasses=-1):
+#         self.in_planes = 16
+#         super(DOC_ResNet, self).__init__()
+#
+#         layers, block = RESNET_CONFIGS[resnet_type]
+#
+#         self._norm_layer = nn.BatchNorm2d
+#
+#         self.conv1 = nn.Conv2d(1, 16, kernel_size=(9, 3), stride=(3, 1), padding=(1, 1), bias=False)
+#         self.bn1 = nn.BatchNorm2d(16)
+#         self.activation = nn.ReLU()
+#
+#         self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
+#         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+#         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+#         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+#
+#         self.conv5 = nn.Conv2d(512 * block.expansion, 256, kernel_size=(num_nodes, 3), stride=(1, 1), padding=(0, 1),
+#                                bias=False)
+#         self.bn5 = nn.BatchNorm2d(256)
+#
+#         self.fc = nn.Linear(256 * 2, 256)
+#         self.lbn = nn.BatchNorm1d(256)
+#
+#         self.fc_feat = nn.Linear(256, 2)
+#
+#         self.fc_mu = nn.Linear(2, nclasses) if nclasses >= 2 else nn.Linear(256, 1)
+#
+#         self.initialize_params()
+#
+#         self.attention = SelfAttention(256)
+#
+#     def initialize_params(self):
+#
+#         for layer in self.modules():
+#             if isinstance(layer, torch.nn.Conv2d):
+#                 init.kaiming_normal_(layer.weight, a=0, mode='fan_out')
+#             elif isinstance(layer, torch.nn.Linear):
+#                 init.kaiming_uniform_(layer.weight)
+#             elif isinstance(layer, torch.nn.BatchNorm2d) or isinstance(layer, torch.nn.BatchNorm1d):
+#                 layer.weight.data.fill_(1)
+#                 layer.bias.data.zero_()
+#
+#     def _make_layer(self, block, planes, num_blocks, stride=1):
+#         norm_layer = self._norm_layer
+#         downsample = None
+#         if stride != 1 or self.in_planes != planes * block.expansion:
+#             downsample = nn.Sequential(conv1x1(self.in_planes, planes * block.expansion, stride),
+#                                        norm_layer(planes * block.expansion))
+#         layers = []
+#         layers.append(block(self.in_planes, planes, stride, downsample, 1, 64, 1, norm_layer))
+#         self.in_planes = planes * block.expansion
+#         for _ in range(1, num_blocks):
+#             layers.append(
+#                 block(self.in_planes, planes, 1, groups=1, base_width=64, dilation=False, norm_layer=norm_layer))
+#
+#         return nn.Sequential(*layers)
+#
+#     def forward_once(self, x):
+#
+#         x = self.conv1(x)
+#         x = self.activation(self.bn1(x))
+#         x = self.layer1(x)
+#         x = self.layer2(x)
+#         x = self.layer3(x)
+#         x = self.layer4(x)
+#         # print(x.shape)
+#         x = self.conv5(x)
+#         x = self.activation(self.bn5(x)).squeeze(2)
+#         # print(x.shape)
+#
+#         stats = self.attention(x.permute(0, 2, 1).contiguous())
+#         fc = F.relu(self.lbn(self.fc(stats)))
+#         feat = self.fc_feat(fc)
+#         mu = self.fc_mu(feat)
+#
+#         # embs = torch.div(mu, torch.norm(mu, 2, 1).unsqueeze(1).expand_as(mu))
+#
+#         return feat, mu
+#
+#     def forward(self, ref, tar):
+#         feats_ref, out_ref = self.forward_once(ref)
+#         feats_tar, out_tar = self.forward_once(tar)
+#
+#         return feats_ref, out_ref, feats_tar, out_tar
 
 if __name__ == "__main__":
-    cqcc = torch.randn((32,1,90,650))
-    resnet = ResNet(4, resnet_type='18', nclasses=2)
+    cqcc = torch.randn((32,1,90,788)).cuda()
+    resnet = ResNet(4, 2, resnet_type='18', nclasses=2).cuda()
     _, output = resnet(cqcc)
     print(output.shape)
