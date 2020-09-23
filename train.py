@@ -53,8 +53,8 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--add_loss', type=str, default='isolate',
-                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
+    parser.add_argument('--add_loss', type=str, default=None,
+                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
@@ -202,6 +202,11 @@ def train(args):
         iso_loss.train()
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
+    if args.add_loss == "ang_iso":
+        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=10).to(args.device)
+        ang_iso.train()
+        ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=0.01)
+
     if args.add_loss == "multi_isolate":
         multi_iso_loss = MultiIsolateCenterLoss(args.enc_dim, args.num_centers, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
         if args.continue_training:
@@ -266,6 +271,17 @@ def train(args):
                     cqcc_loss.backward()
                     cqcc_optimizer.step()
                     iso_optimzer.step()
+
+                if args.add_loss == "ang_iso":
+                    ang_isoloss = ang_iso(feats, labels)
+                    trainlossDict["feat"].append(cqcc_loss.item())
+                    cqcc_loss = ang_isoloss * args.weight_loss
+                    cqcc_optimizer.zero_grad()
+                    ang_iso_optimzer.zero_grad()
+                    trainlossDict["ang_iso"].append(ang_isoloss.item())
+                    cqcc_loss.backward()
+                    cqcc_optimizer.step()
+                    ang_iso_optimzer.step()
 
                 if args.add_loss == "multi_isolate":
                     multi_isoloss = multi_iso_loss(feats, labels)
@@ -334,7 +350,15 @@ def train(args):
             feat = torch.cat(ip1_loader, 0)
             labels = torch.cat(idx_loader, 0)
             tags = torch.cat(tag_loader, 0)
-            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.centers.data.cpu().numpy(),
+            if args.add_loss == "isolate":
+                centers = iso_loss.center
+            elif args.add_loss == "multi_isolate":
+                centers = multi_iso_loss.centers
+            elif args.add_loss == "ang_iso":
+                centers = ang_iso.center
+            else:
+                centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
+            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
                       epoch_num + 1, "Train")
 
         # Val the model
@@ -372,6 +396,9 @@ def train(args):
                     elif args.add_loss == "isolate":
                         isoloss = iso_loss(feats, labels)
                         devlossDict["iso_loss"].append(isoloss.item())
+                    elif args.add_loss == "ang_iso":
+                        ang_isoloss = ang_iso(feats, labels)
+                        devlossDict["ang_iso"].append(ang_isoloss.item())
                     elif args.add_loss == "multi_isolate":
                         multi_isoloss = multi_iso_loss(feats, labels)
                         devlossDict["multi_iso_loss"].append(multi_isoloss.item())
@@ -394,7 +421,15 @@ def train(args):
                 feat = torch.cat(ip1_loader, 0)
                 labels = torch.cat(idx_loader, 0)
                 tags = torch.cat(tag_loader, 0)
-                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), multi_iso_loss.centers.data.cpu().numpy(),
+                if args.add_loss == "isolate":
+                    centers = iso_loss.center
+                elif args.add_loss == "multi_isolate":
+                    centers = multi_iso_loss.centers
+                elif args.add_loss == "ang_iso":
+                    centers = ang_iso.center
+                else:
+                    centers = torch.mean(feat[labels==0], dim=0, keepdim=True)
+                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
                           epoch_num + 1, "Dev")
 
             valLoss = np.nanmean(devlossDict[key])
@@ -407,6 +442,10 @@ def train(args):
             elif args.add_loss == "isolate":
                 loss_model = iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+            elif args.add_loss == "ang_iso":
+                loss_model = ang_iso
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             elif args.add_loss == "multi_isolate":
                 loss_model = multi_iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
@@ -431,6 +470,9 @@ def train(args):
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
                 elif args.add_loss == "isolate":
                     loss_model = iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+                elif args.add_loss == "ang_iso":
+                    loss_model = ang_iso
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
                 elif args.add_loss == "multi_isolate":
                     loss_model = multi_iso_loss
@@ -493,7 +535,7 @@ def test(args, model, loss_model, part='eval'):
             feats, cqcc_outputs = model(cqcc)
             labels = labels.to(args.device)
 
-            if args.add_loss in [None, "center", "isolate", "multi_isolate", "multicenter_isolate"]:
+            if args.add_loss in [None, "center", "isolate", "ang_iso", "multi_isolate", "multicenter_isolate"]:
                 _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
                 total += labels.size(0)
                 cqcc_correct += (cqcc_predicted == labels).sum().item()
@@ -514,6 +556,9 @@ def test(args, model, loss_model, part='eval'):
             for j in range(labels.size(0)):
                 if args.add_loss == "isolate":
                     score = torch.norm(feats[j].unsqueeze(0) - loss_model.center, p=2, dim=1).data.item()
+                elif args.add_loss == "ang_iso":
+                    score = F.normalize(feats[j].unsqueeze(0), p=2, dim=1) @ F.normalize(loss_model.center, p=2, dim=1).T
+                    score = score.data.item()
                 elif args.add_loss == "multi_isolate":
                     genuine_dist = torch.norm((feats[j].unsqueeze(0).repeat(args.num_centers, 1) - loss_model.centers), p=2, dim=1)
                     score, indices = torch.min(genuine_dist, dim=-1)
@@ -542,6 +587,7 @@ if __name__ == "__main__":
     model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
     # if args.test_only:
     loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+    # loss_model = None
     # TReer_cm, TRmin_tDCF = test(args, model, loss_model, "train")
     # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
     TEeer_cm, TEmin_tDCF = test(args, model, loss_model)

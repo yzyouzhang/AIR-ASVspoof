@@ -86,8 +86,8 @@ class AngularIsoLoss(nn.Module):
         self.r_real = r_real
         self.r_fake = r_fake
         self.alpha = alpha
-        self.w = nn.Parameter(torch.randn(self.feat_dim, 1))
-        nn.init.kaiming_uniform_(self.w, 0.25)
+        self.center = nn.Parameter(torch.randn(1, self.feat_dim))
+        nn.init.kaiming_uniform_(self.center, 0.25)
         self.softplus = nn.Softplus()
 
     def forward(self, x, labels):
@@ -96,10 +96,10 @@ class AngularIsoLoss(nn.Module):
             x: feature matrix with shape (batch_size, feat_dim).
             labels: ground truth labels with shape (batch_size).
         """
-        w = F.normalize(self.w, p=2, dim=0)
+        w = F.normalize(self.center, p=2, dim=1)
         x = F.normalize(x, p=2, dim=1)
 
-        scores = x @ w
+        scores = x @ w.T
         scores[labels == 0] = scores[labels == 0] - self.r_real
         scores[labels == 1] = self.r_fake - scores[labels == 1]
         loss = self.softplus(torch.logsumexp(self.alpha*scores, dim=0))
