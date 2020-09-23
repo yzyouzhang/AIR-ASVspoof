@@ -80,7 +80,7 @@ class CenterlossFunction(Function):
         return grad_feature * grad_output, None, grad_centers
 
 class AngularIsoLoss(nn.Module):
-    def __init__(self, feat_dim=2, r_real=0.1, r_fake=0.5, alpha=10.0):
+    def __init__(self, feat_dim=2, r_real=0.9, r_fake=0.5, alpha=10.0):
         super(AngularIsoLoss, self).__init__()
         self.feat_dim = feat_dim
         self.r_real = r_real
@@ -100,8 +100,8 @@ class AngularIsoLoss(nn.Module):
         x = F.normalize(x, p=2, dim=1)
 
         scores = x @ w.T
-        scores[labels == 0] = scores[labels == 0] - self.r_real
-        scores[labels == 1] = self.r_fake - scores[labels == 1]
+        scores[labels == 0] = self.r_real - scores[labels == 0]
+        scores[labels == 1] = scores[labels == 1] - self.r_fake
         loss = self.softplus(torch.logsumexp(self.alpha*scores, dim=0))
         return loss
 
