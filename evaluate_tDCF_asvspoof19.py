@@ -4,8 +4,8 @@ import eval_metrics as em
 import matplotlib.pyplot as plt
 
 
-def compute_eer_and_tdcf(cm_score_file, args):
-    asv_score_file = os.path.join(args.path_to_database, 'LA/ASVspoof2019_LA_asv_scores/ASVspoof2019.LA.asv.eval.gi.trl.scores.txt')
+def compute_eer_and_tdcf(cm_score_file, path_to_database):
+    asv_score_file = os.path.join(path_to_database, 'LA/ASVspoof2019_LA_asv_scores/ASVspoof2019.LA.asv.eval.gi.trl.scores.txt')
 
     # Fix tandem detection cost function (t-DCF) parameters
     Pspoof = 0.05
