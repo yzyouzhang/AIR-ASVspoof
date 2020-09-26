@@ -15,11 +15,8 @@ from dataset import ASVspoof2019
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from collections import defaultdict
 
-# not visaul
 # lr 10 0.1
 # r 0.2 0.9
-# test checkpoint model, save feat
-# clean server
 # Adam SGD
 
 def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
@@ -29,7 +26,9 @@ def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
     # c = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
     #      '#ff00ff', '#990000', '#999900', '#009900', '#009999']
     c = ['#ff0000', '#003366', '#ffff00']
-    c_tag = ['#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#990000', '#999900']
+    c_tag = ['#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#990000', '#999900',
+             '#009900', '#009999', '#00ff00', '#990000', '#999900', '#ff0000',
+             '#003366', '#ffff00', '#f0000f', '#0f00f0', '#00ffff', '#0000ff', '#ff00ff']
     # plt.clf()
     num_centers, enc_dim = center.shape
     if enc_dim > 2:
@@ -52,9 +51,11 @@ def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
     ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
     plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
     ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
-    for i in range(1, 7):
+    for i in range(1, 20):
         ax3.plot(feat[tags == i, 0], feat[tags == i, 1], '.', c=c_tag[i-1], markersize=2)
-    ax3.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06'])
+    ax3.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
+                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
+                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
     ax1.legend(['genuine', 'spoofing', 'center'])
     # PCA visualization
     ax4.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=1)
@@ -62,9 +63,11 @@ def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
     ax4.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
     plt.setp((ax5, ax6), xlim=ax4.get_xlim(), ylim=ax4.get_ylim())
     ax5.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=2)
-    for i in range(1, 7):
+    for i in range(1, 20):
         ax6.plot(feat_pca[tags == i, 0], feat_pca[tags == i, 1], '.', c=c_tag[i - 1], markersize=2)
-    ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06'])
+    ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
+                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
+                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
     ax4.legend(['genuine', 'spoofing', 'center'])
     fig.suptitle("Feature Visualization of Epoch %d, %s, %.5f, %.5f" % (epoch, trainOrDev, ex_ratio[0], ex_ratio[0]))
     plt.savefig(os.path.join(out_fold, trainOrDev + '_vis_feat_epoch=%d.jpg' % epoch))
@@ -140,22 +143,24 @@ def create_new_split(df_train, df_dev, split_dict):
 
 def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
     dirname = os.path.dirname
+    basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
         dir_path = dirname(dirname(feat_model_path))
+        epoch_num = int(basename.split("_")[-1])
     else:
         dir_path = dirname(feat_model_path)
-    basename = os.path.splitext(os.path.basename(feat_model_path))[0]
+        epoch_num = 0
     model = torch.load(feat_model_path)
-    loss_model = torch.load(loss_model_path)
+    loss_model = torch.load(loss_model_path) if add_loss is not None else None
     test_set = ASVspoof2019("/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019Features/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
-                            "Melspec", feat_len=800, pad_chop=False)
+                            "Melspec", feat_len=750, pad_chop=False)
     testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0,
                                 collate_fn=test_set.collate_fn)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ip1_loader, tag_loader, idx_loader = [], [], []
     model.eval()
-    with open(os.path.join(dir_path, 'model_cm_score.txt'), 'w') as cm_score_file:
+    with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
             cqcc = cqcc.unsqueeze(1).float().to(device)
             feats, cqcc_outputs = model(cqcc)
@@ -188,8 +193,8 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
                     '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",
                                           score))
-    eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(dir_path, 'model_cm_score.txt'), "/data/neil/DS_10283_3336/")
-
+    eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(dir_path, 'checkpoint_cm_score.txt'),
+                                            "/data/neil/DS_10283_3336/")
     feat = torch.cat(ip1_loader, 0)
     labels = torch.cat(idx_loader, 0)
     tags = torch.cat(tag_loader, 0)
@@ -201,10 +206,11 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
         centers = loss_model.center
     else:
         centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
-    torch.save(feat, os.path.join(dir_path, 'feat_19.pt'))
-    torch.save(tags, os.path.join(dir_path, 'tags_19.pt'))
+    torch.save(feat, os.path.join(dir_path, 'feat_%d.pt' % epoch_num))
+    torch.save(tags, os.path.join(dir_path, 'tags_%d.pt' % epoch_num))
     visualize(feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(),
-              centers.data.cpu().numpy(), 19, part, dir_path)
+              centers.data.cpu().numpy(), epoch_num, part, dir_path)
+
     return eer_cm, min_tDCF
 
 

@@ -100,8 +100,10 @@ class AngularIsoLoss(nn.Module):
         x = F.normalize(x, p=2, dim=1)
 
         scores = x @ w.T
-        scores[labels == 0] = self.r_real - scores[labels == 0]
-        scores[labels == 1] = scores[labels == 1] - self.r_fake
+        scores[labels == 0] = scores[labels == 0] - self.r_real
+        scores[labels == 1] = self.r_fake - scores[labels == 1]
+        # scores[labels == 0] = self.r_real - scores[labels == 0]
+        # scores[labels == 1] = scores[labels == 1] - self.r_fake
         loss = self.softplus(torch.logsumexp(self.alpha*scores, dim=0))
         return loss
 
