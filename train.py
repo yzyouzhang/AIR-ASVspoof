@@ -25,7 +25,7 @@ def initParams():
     # Data folder prepare
     parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
-                        default='/dataNVME/neil/ASVspoof2019Features/')
+                        default='/dataNVME/neil/ASVspoof2019LAFeatures/')
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
                         default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
@@ -435,32 +435,33 @@ def train(args):
             valLoss = np.nanmean(devlossDict[key])
             # if args.add_loss == "isolate":
             #     print("isolate center: ", iso_loss.center.data)
-            torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num+1)))
-            if args.add_loss == "center":
-                loss_model = centerLoss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "isolate":
-                loss_model = iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "ang_iso":
-                loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "multi_isolate":
-                loss_model = multi_iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "multicenter_isolate":
-                loss_model = multicenter_iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "lgm":
-                loss_model = lgm_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            else:
-                loss_model = None
+            if (epoch_num + 1) % 2 == 0:
+                torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num+1)))
+                if args.add_loss == "center":
+                    loss_model = centerLoss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "isolate":
+                    loss_model = iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "ang_iso":
+                    loss_model = ang_iso
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+                elif args.add_loss == "multi_isolate":
+                    loss_model = multi_iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+                elif args.add_loss == "multicenter_isolate":
+                    loss_model = multicenter_iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "lgm":
+                    loss_model = lgm_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "lgcl":
+                    loss_model = lgcl_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                else:
+                    loss_model = None
 
             if valLoss < prev_loss:
                 # Save the model checkpoint
@@ -493,7 +494,7 @@ def train(args):
             else:
                 early_stop_cnt += 1
 
-            if early_stop_cnt == 20:
+            if early_stop_cnt == 50:
                 with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
                     res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
                 break

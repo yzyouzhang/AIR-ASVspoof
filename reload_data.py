@@ -7,8 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # path_to_features = '/home/yzh298/anti-spoofing/ASVspoof2019Features/'
-path_to_audio = '/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_'
-path_to_features = '/dataNVME/neil/ASVspoof2019Features/'
+access_type = "PA"
+path_to_audio = '/data/neil/DS_10283_3336/'+access_type+'/ASVspoof2019_'+access_type+'_'
+path_to_features = '/dataNVME/neil/ASVspoof2019'+access_type+'Features/'
 
 def reload_data(path_to_features, part):
     matfiles = find_files('/dataNVME/neil/' + part + '/', ext='mat')
@@ -51,7 +52,7 @@ def reload_stft(path_to_audio, path_to_features, part):
     for i in range(len(audio_files)):
         audio, sr = librosa.load(audio_files[i], sr=16000, mono=True)
         key = audio_files[i][len(path_to_audio + part + '/flac/'):-5]
-        stft = np.abs(librosa.stft(audio, n_fft=512))
+        stft = np.abs(librosa.stft(audio, n_fft=512))   #,128 Mel
         with open(path_to_features + part + '/' + key + 'STFT.pkl', 'wb') as handle4:
             pickle.dump(stft, handle4, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -83,7 +84,7 @@ if __name__ == "__main__":
         reload_mfcc(path_to_audio, path_to_features, part)
         reload_cqt(path_to_audio, path_to_features, part)
         reload_stft(path_to_audio, path_to_features, part)
-        # reload_melspec(path_to_audio, path_to_features, part)
+        reload_melspec(path_to_audio, path_to_features, part)
         reload_wavform(path_to_audio, path_to_features, part)
 
 
