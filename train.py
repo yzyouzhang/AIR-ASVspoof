@@ -25,7 +25,7 @@ def initParams():
     # Data folder prepare
     parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
-                        default='/dataNVME/neil/ASVspoof2019Features/')
+                        default='/dataNVME/neil/ASVspoof2019LAFeatures/')
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
                         default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
@@ -153,7 +153,7 @@ def train(args):
 
     # initialize model
     if args.model == 'resnet':
-        node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 50}
+        node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
 
     if args.continue_training:
@@ -435,32 +435,33 @@ def train(args):
             valLoss = np.nanmean(devlossDict[key])
             # if args.add_loss == "isolate":
             #     print("isolate center: ", iso_loss.center.data)
-            torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num+1)))
-            if args.add_loss == "center":
-                loss_model = centerLoss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "isolate":
-                loss_model = iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "ang_iso":
-                loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "multi_isolate":
-                loss_model = multi_iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "multicenter_isolate":
-                loss_model = multicenter_iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "lgm":
-                loss_model = lgm_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-            else:
-                loss_model = None
+            if (epoch_num + 1) % 2 == 0:
+                torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num+1)))
+                if args.add_loss == "center":
+                    loss_model = centerLoss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "isolate":
+                    loss_model = iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "ang_iso":
+                    loss_model = ang_iso
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+                elif args.add_loss == "multi_isolate":
+                    loss_model = multi_iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+                elif args.add_loss == "multicenter_isolate":
+                    loss_model = multicenter_iso_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "lgm":
+                    loss_model = lgm_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                elif args.add_loss == "lgcl":
+                    loss_model = lgcl_loss
+                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
+                else:
+                    loss_model = None
 
             if valLoss < prev_loss:
                 # Save the model checkpoint
@@ -476,8 +477,7 @@ def train(args):
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
                 elif args.add_loss == "multi_isolate":
                     loss_model = multi_iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                        'anti-spoofing_loss_model.pt'))
+                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
                 elif args.add_loss == "multicenter_isolate":
                     loss_model = multicenter_iso_loss
                     torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
@@ -494,7 +494,7 @@ def train(args):
             else:
                 early_stop_cnt += 1
 
-            if early_stop_cnt == 20:
+            if early_stop_cnt == 50:
                 with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
                     res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
                 break
@@ -507,12 +507,14 @@ def train(args):
 
 
 def test(args, model, loss_model, part='eval'):
+    model.eval()
     test_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, part,
                             args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
                                 collate_fn=test_set.collate_fn)
     cqcc_correct = 0
     total = 0
+    ip1_loader, tag_loader, idx_loader = [], [], []
     with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:
     #     for i in trange(len(test_set)):
     #         score_lst = []
@@ -528,12 +530,13 @@ def test(args, model, loss_model, part='eval'):
     #                                               score))
 
         for i, (cqcc, audio_fn, tags, labels) in enumerate(testDataLoader):
-            if args.model == 'rnn':
-                cqcc = cqcc.transpose(1, 2).float().to(args.device)
-            else:
-                cqcc = cqcc.unsqueeze(1).float().to(args.device)
+            cqcc = cqcc.unsqueeze(1).float().to(args.device)
             feats, cqcc_outputs = model(cqcc)
+            tags = tags.to(args.device)
             labels = labels.to(args.device)
+            # ip1_loader.append(feats)
+            # tag_loader.append(tags)
+            # idx_loader.append(labels)
 
             if args.add_loss in [None, "center", "isolate", "ang_iso", "multi_isolate", "multicenter_isolate"]:
                 _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
@@ -575,7 +578,23 @@ def test(args, model, loss_model, part='eval'):
                     '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",
                                           score))
-    eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(args.out_fold, 'cm_score.txt'), args)
+    eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(args.out_fold, 'cm_score.txt'), args.path_to_database)
+
+    # feat = torch.cat(ip1_loader, 0)
+    # labels = torch.cat(idx_loader, 0)
+    # tags = torch.cat(tag_loader, 0)
+    # if args.add_loss == "isolate":
+    #     centers = loss_model.center
+    # elif args.add_loss == "multi_isolate":
+    #     centers = loss_model.centers
+    # elif args.add_loss == "ang_iso":
+    #     centers = loss_model.center
+    # else:
+    #     centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
+    # torch.save(feat, os.path.join(args.out_fold, 'feat_19.pt'))
+    # torch.save(tags, os.path.join(args.out_fold, 'tags_19.pt'))
+    # visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
+    #           19, part)
 
     return eer_cm, min_tDCF
 
@@ -585,9 +604,10 @@ if __name__ == "__main__":
     if not args.test_only:
         _, _ = train(args)
     model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
-    # if args.test_only:
-    loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-    # loss_model = None
+    if args.add_loss is None:
+        loss_model = None
+    else:
+        loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
     # TReer_cm, TRmin_tDCF = test(args, model, loss_model, "train")
     # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
     TEeer_cm, TEmin_tDCF = test(args, model, loss_model)
@@ -596,3 +616,9 @@ if __name__ == "__main__":
         # res_file.write('\nVal EER: %8.5f min-tDCF: %8.5f\n' % (VAeer_cm, VAmin_tDCF))
         res_file.write('\nTest EER: %8.5f min-tDCF: %8.5f\n' % (TEeer_cm, TEmin_tDCF))
     plot_loss(args)
+
+    # # Test a checkpoint model
+    # args = initParams()
+    # model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_19.pt'))
+    # loss_model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_19.pt'))
+    # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")

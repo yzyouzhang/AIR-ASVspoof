@@ -30,8 +30,7 @@ class ASVspoof2019(Dataset):
                       "A19": 19}
         self.label = {"spoof": 1, "bonafide": 0}
 
-        # # would not work if change data split
-        # # TODO: add something if change data split
+        # # would not work if change data split but this csv is only for feat_len
         # self.csv = pd.read_csv(self.ptf + "Set_csv.csv")
 
         with open(protocol, 'r') as f:

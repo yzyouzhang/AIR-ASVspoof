@@ -100,8 +100,10 @@ class AngularIsoLoss(nn.Module):
         x = F.normalize(x, p=2, dim=1)
 
         scores = x @ w.T
-        scores[labels == 0] = self.r_real - scores[labels == 0]
-        scores[labels == 1] = scores[labels == 1] - self.r_fake
+        scores[labels == 0] = scores[labels == 0] - self.r_real
+        scores[labels == 1] = self.r_fake - scores[labels == 1]
+        # scores[labels == 0] = self.r_real - scores[labels == 0]
+        # scores[labels == 1] = scores[labels == 1] - self.r_fake
         loss = self.softplus(torch.logsumexp(self.alpha*scores, dim=0))
         return loss
 
@@ -191,7 +193,11 @@ class MultiIsolateCenterLoss(nn.Module):
             loss = 0
         spoofing_data = x[labels == 1].repeat(self.num_centers, 1, 1).transpose(0, 1)
         spoofing_dist = torch.norm((spoofing_data - self.centers.unsqueeze(0)), p=2, dim=2)
-        loss += F.relu(self.r_fake - spoofing_dist).mean()
+
+        min_spoofing_dist_values, indices = torch.min(spoofing_dist, dim=1)
+        loss += F.relu(self.r_fake - min_spoofing_dist_values).mean()
+        # loss += F.relu(self.r_fake - spoofing_dist).mean()
+
         return loss
 
 class MultiIsolateCenterLossEM(nn.Module):
@@ -214,7 +220,11 @@ class MultiIsolateCenterLossEM(nn.Module):
             loss = 0
         spoofing_data = x[labels == 1].repeat(self.num_centers, 1, 1).transpose(0, 1)
         spoofing_dist = torch.norm((spoofing_data - self.centers.unsqueeze(0)), p=2, dim=2)
-        loss += F.relu(self.r_fake - spoofing_dist).mean()
+
+        min_spoofing_dist_values, indices = torch.min(spoofing_dist, dim=1)
+        loss += F.relu(self.r_fake - min_spoofing_dist_values).mean()
+        # loss += F.relu(self.r_fake - spoofing_dist).mean()
+
         return loss
 
 class LGMLoss_v0(nn.Module):
