@@ -23,6 +23,7 @@ def initParams():
     parser.add_argument('--seed', type=int, help="random number seed", default=999)
 
     # Data folder prepare
+    parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
     parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
                         default='/dataNVME/neil/ASVspoof2019LAFeatures/')
@@ -164,11 +165,11 @@ def train(args):
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
-    training_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
+    training_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
-    genuine_trainset = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
+    genuine_trainset = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, genuine_only=True)
-    validation_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
+    validation_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
     trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=training_set.collate_fn)
@@ -508,7 +509,7 @@ def train(args):
 
 def test(args, model, loss_model, part='eval'):
     model.eval()
-    test_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, part,
+    test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, part,
                             args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
                                 collate_fn=test_set.collate_fn)

@@ -11,23 +11,28 @@ import pandas as pd
 torch.set_default_tensor_type(torch.FloatTensor)
 
 class ASVspoof2019(Dataset):
-    def __init__(self, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC', genuine_only=False, feat_len=650, pad_chop=True):
+    def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC', genuine_only=False, feat_len=650, pad_chop=True):
+        self.access_type = access_type
         self.ptd = path_to_database
         self.path_to_features = path_to_features
         self.part = part
         self.ptf = os.path.join(path_to_features, self.part)
-        self.path_to_audio = os.path.join(self.ptd, 'LA/ASVspoof2019_LA_'+ self.part +'/flac/')
+        self.path_to_audio = os.path.join(self.ptd, access_type, 'ASVspoof2019_'+access_type+'_'+ self.part +'/flac/')
         self.genuine_only = genuine_only
         self.feat_len = feat_len
         self.feature = feature
         self.pad_chop = pad_chop
         self.path_to_protocol = path_to_protocol
-        protocol = os.path.join(self.path_to_protocol, 'ASVspoof2019.LA.cm.'+ self.part + '.trl.txt')
+        protocol = os.path.join(self.path_to_protocol, 'ASVspoof2019.'+access_type+'.cm.'+ self.part + '.trl.txt')
         if self.part == "eval":
-            protocol = self.ptd + 'LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.' + self.part + '.trl.txt'
-        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
+            protocol = self.ptd + access_type +'/ASVspoof2019_' + access_type\
+                       + '_cm_protocols/ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt'
+        if self.access_type == 'LA':
+            self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
                       "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
                       "A19": 19}
+        else:
+            self.tag = {"-": 0, "AA": 1, "AB": 2, "AC": 3, "BA": 4, "BB": 5, "BC": 6, "CA": 7, "CB": 8, "CC": 9}
         self.label = {"spoof": 1, "bonafide": 0}
 
         # # would not work if change data split but this csv is only for feat_len
@@ -36,8 +41,12 @@ class ASVspoof2019(Dataset):
         with open(protocol, 'r') as f:
             audio_info = [info.strip().split() for info in f.readlines()]
             if genuine_only:
-                num_bonafide = {"train": 2580, "dev": 2548}
-                self.all_info = audio_info[:num_bonafide[self.part]]
+                assert self.part in ["train", "dev"]
+                if self.access_type == "LA":
+                    num_bonafide = {"train": 2580, "dev": 2548}
+                    self.all_info = audio_info[:num_bonafide[self.part]]
+                else:
+                    self.all_info = audio_info[:5400]
             else:
                 self.all_info = audio_info
 
