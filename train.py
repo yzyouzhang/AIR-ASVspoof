@@ -401,7 +401,7 @@ def train(args):
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\t" + eer +"\n")
             print(eer)
-            
+
             if args.visualize and ((epoch_num+1) % 3 == 1):
                 feat = torch.cat(ip1_loader, 0)
                 tags = torch.cat(tag_loader, 0)
