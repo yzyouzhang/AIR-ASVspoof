@@ -14,6 +14,8 @@ import torch.nn.functional as F
 from dataset import ASVspoof2019
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from collections import defaultdict
+from tqdm import tqdm
+import eval_metrics as em
 
 # lr 10 0.1
 # r 0.2 0.9
@@ -152,7 +154,7 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
         epoch_num = 0
     model = torch.load(feat_model_path)
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
-    test_set = ASVspoof2019("/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019Features/",
+    test_set = ASVspoof2019("LA", "/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
                             "Melspec", feat_len=750, pad_chop=False)
     testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0,
@@ -241,7 +243,8 @@ def test_fluctuate_eer(feat_model_path, loss_model_path, part, add_loss, visuali
             tag_loader.append(tags.detach().cpu())
             labels = labels.to(device)
             idx_loader.append(labels.detach().cpu())
-            score = torch.norm(feats - loss_model.center, p=2, dim=1)
+            # score = torch.norm(feats - loss_model.center, p=2, dim=1)
+            score = cqcc_outputs[:, 0]
             score_loader.append(score.detach().cpu())
         scores = torch.cat(score_loader, 0).data.cpu().numpy()
         labels = torch.cat(idx_loader, 0).data.cpu().numpy()
@@ -261,8 +264,21 @@ if __name__ == "__main__":
     #                  names=["speaker", "filename", "-", "attack", "label"], sep=" ")
     # create_new_split(df_train, df_dev, split_dict)
 
-    feat_model_path = "/home/neil/AIR-ASVspoof/models0922/ang_iso/checkpoint/anti-spoofing_cqcc_model_19.pt"
-    loss_model_path = "/home/neil/AIR-ASVspoof/models0922/ang_iso/checkpoint/anti-spoofing_loss_model_19.pt"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-    test_checkpoint_model(feat_model_path, loss_model_path, "eval", "ang_iso")
+    # feat_model_path = "/home/neil/AIR-ASVspoof/models0922/ang_iso/checkpoint/anti-spoofing_cqcc_model_19.pt"
+    # loss_model_path = "/home/neil/AIR-ASVspoof/models0922/ang_iso/checkpoint/anti-spoofing_loss_model_19.pt"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    # test_checkpoint_model(feat_model_path, loss_model_path, "eval", "ang_iso")
 
+    # b = []
+    # for i in range(50, 120, 2):
+    #     feat_model_path = "/data/neil/antiRes/models1007/iso_loss4/checkpoint/anti-spoofing_cqcc_model_%d.pt" % i
+    #     loss_model_path = "/data/neil/antiRes/models1007/iso_loss4/checkpoint/anti-spoofing_loss_model_%d.pt" % i
+    #     eer = test_fluctuate_eer(feat_model_path, loss_model_path, "eval", "isolate")
+    #     print(eer)
+    #     b.append(eer)
+
+    feat_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_cqcc_model.pt"
+    loss_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_loss_model.pt"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+    test_checkpoint_model(feat_model_path, loss_model_path, "eval", None)
+    # print(eer)
