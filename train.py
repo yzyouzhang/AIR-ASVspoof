@@ -34,7 +34,7 @@ def initParams():
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", required=True,
-                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT"], default='Melspec')
+                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB"], default='Melspec')
     parser.add_argument("--feat_len", type=int, help="features length", default=650)
     parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=16)
@@ -206,6 +206,8 @@ def train(args):
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
         adjust_learning_rate(args, cqcc_optimizer, epoch_num)
+        if args.add_loss == "isolate":
+            adjust_learning_rate(args, iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         # with trange(2) as t:
         with trange(len(trainDataLoader)) as t:
@@ -230,7 +232,7 @@ def train(args):
                     cqcc_loss += centerloss * args.weight_loss
                     cqcc_optimizer.zero_grad()
                     center_optimzer.zero_grad()
-                    trainlossDict["center"].append(centerloss.item())
+                    trainlossDict[args.add_loss].append(centerloss.item())
                     cqcc_loss.backward()
                     cqcc_optimizer.step()
                     # for param in centerLoss.parameters():
@@ -243,7 +245,7 @@ def train(args):
                     cqcc_loss = isoloss * args.weight_loss
                     cqcc_optimizer.zero_grad()
                     iso_optimzer.zero_grad()
-                    trainlossDict["iso"].append(isoloss.item())
+                    trainlossDict[args.add_loss].append(isoloss.item())
                     cqcc_loss.backward()
                     cqcc_optimizer.step()
                     iso_optimzer.step()
@@ -254,7 +256,7 @@ def train(args):
                     cqcc_loss = ang_isoloss * args.weight_loss
                     cqcc_optimizer.zero_grad()
                     ang_iso_optimzer.zero_grad()
-                    trainlossDict["ang_iso"].append(ang_isoloss.item())
+                    trainlossDict[args.add_loss].append(ang_isoloss.item())
                     cqcc_loss.backward()
                     cqcc_optimizer.step()
                     ang_iso_optimzer.step()
@@ -265,7 +267,7 @@ def train(args):
                     cqcc_loss = multi_isoloss * args.weight_loss
                     cqcc_optimizer.zero_grad()
                     multi_iso_optimzer.zero_grad()
-                    trainlossDict["multi_iso"].append(multi_isoloss.item())
+                    trainlossDict[args.add_loss].append(multi_isoloss.item())
                     cqcc_loss.backward()
                     cqcc_optimizer.step()
                     multi_iso_optimzer.step()
@@ -277,7 +279,7 @@ def train(args):
                     multiisoloss = multicenter_iso_loss(feats, labels)
                     cqcc_loss = multiisoloss * args.weight_loss
                     cqcc_optimizer.zero_grad()
-                    trainlossDict["multiiso"].append(multiisoloss.item())
+                    trainlossDict[args.add_loss].append(multiisoloss.item())
                     cqcc_loss.backward()
                     cqcc_optimizer.step()
 
@@ -290,7 +292,7 @@ def train(args):
                     cqcc_optimizer.zero_grad()
                     lgm_optimzer.zero_grad()
                     cqcc_loss += lgmloss
-                    trainlossDict["lgm"].append(lgmloss.item())
+                    trainlossDict[args.add_loss].append(lgmloss.item())
                     cqcc_loss.backward()
                     cqcc_optimizer.step()
                     lgm_optimzer.step()
@@ -299,7 +301,7 @@ def train(args):
                     outputs, moutputs = lgcl_loss(feats, labels)
                     cqcc_loss = criterion(moutputs, labels)
                     # print(criterion(moutputs, labels).data)
-                    trainlossDict["feat"].append(cqcc_loss.item())
+                    trainlossDict[args.add_loss].append(cqcc_loss.item())
                     cqcc_optimizer.zero_grad()
                     lgcl_optimzer.zero_grad()
                     cqcc_loss.backward()
@@ -317,7 +319,7 @@ def train(args):
                 t.set_description(desc_str)
 
                 with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
-                    log.write(str(epoch_num) + "\t" + str(i) + "\t" + str(np.nanmean(trainlossDict[key])) + "\n")
+                    log.write(str(epoch_num) + "\t" + str(i) + "\t" + str(np.nanmean(trainlossDict[args.add_loss])) + "\n")
 
         if args.add_loss == "multicenter_isolate":
             centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model)
@@ -352,7 +354,7 @@ def train(args):
                     labels = labels.to(args.device)
                     feats, cqcc_outputs = cqcc_model(cqcc)
 
-                    score = torch.norm(feats - loss_model.center, p=2, dim=1).data.item()
+                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
 
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
@@ -395,11 +397,11 @@ def train(args):
 
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\n")
-            scores = torch.cat(score_loader, 0)
-            labels = torch.cat(idx_loader, 0)
-            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])
+            scores = torch.cat(score_loader, 0).data.cpu().numpy()
+            labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
-                log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\t" + eer +"\n")
+                log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\t" + str(eer) +"\n")
             print(eer)
 
             if args.visualize and ((epoch_num+1) % 3 == 1):

@@ -9,15 +9,15 @@ import numpy as np
 # local
 # path_to_features = '/home/yzh298/anti-spoofing/ASVspoof2019Features/'
 
-access_type = "LA"
+access_type = "PA"
 # # on air station gpu
-# path_to_mat = '/dataNVME/neil/'
-# path_to_audio = '/data/neil/DS_10283_3336/'+access_type+'/ASVspoof2019_'+access_type+'_'
-# path_to_features = '/dataNVME/neil/ASVspoof2019'+access_type+'Features/'
+path_to_mat = '/dataNVME/neil/'
+path_to_audio = '/data/neil/DS_10283_3336/'+access_type+'/ASVspoof2019_'+access_type+'_'
+path_to_features = '/dataNVME/neil/ASVspoof2019'+access_type+'Features/'
 # on son gpu
-path_to_mat = '/home/neil/ASVspoof2019'+access_type+'Features/'
-path_to_audio = '/home/neil/DS_10283_3336/'+access_type+'/ASVspoof2019_'+access_type+'_'
-path_to_features = '/home/neil/ASVspoof2019'+access_type+'Features/'
+# path_to_mat = '/home/neil/ASVspoof2019'+access_type+'Features/'
+# path_to_audio = '/home/neil/DS_10283_3336/'+access_type+'/ASVspoof2019_'+access_type+'_'
+# path_to_features = '/home/neil/ASVspoof2019'+access_type+'Features/'
 
 def reload_data(path_to_features, part):
     matfiles = find_files(path_to_mat + part + '/', ext='mat')
