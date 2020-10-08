@@ -3,7 +3,6 @@ import numpy as np
 import eval_metrics as em
 import matplotlib.pyplot as plt
 
-
 def compute_eer_and_tdcf(cm_score_file, path_to_database):
     asv_score_file = os.path.join(path_to_database, 'LA/ASVspoof2019_LA_asv_scores/ASVspoof2019.LA.asv.eval.gi.trl.scores.txt')
 

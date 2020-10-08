@@ -14,6 +14,7 @@ from loss import *
 from collections import defaultdict
 from tqdm import tqdm, trange
 from utils import *
+import eval_metrics as em
 
 torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -122,32 +123,6 @@ def adjust_learning_rate(args, optimizer, epoch_num):
     lr = args.lr * (args.lr_decay ** (epoch_num // args.interval))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-def pre_train(args, trainDataLoader, model, model_optimizer):
-    trainlossDict = defaultdict(list)
-    model.train()
-    ip1_loader, idx_loader = [], []
-    with trange(len(trainDataLoader)) as t:
-        for i in t:
-            cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
-            cqcc = cqcc.unsqueeze(1).float().to(args.device)
-            labels = labels.to(args.device)
-            feats, cqcc_outputs = model(cqcc)
-            if args.prtrn_mthd == "cross_entropy":
-                criterion = nn.CrossEntropyLoss()
-                cqcc_loss = criterion(cqcc_outputs, labels)
-                model_optimizer.zero_grad()
-                trainlossDict["feat_loss"].append(cqcc_loss.item())
-                cqcc_loss.backward()
-                model_optimizer.step()
-
-            desc_str = ''
-            for key in sorted(trainlossDict.keys()):
-                desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
-            t.set_description(desc_str)
-
-    return model, model_optimizer
-
 
 def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
@@ -367,7 +342,7 @@ def train(args):
         cqcc_model.eval()
 
         with torch.no_grad():
-            ip1_loader, tag_loader, idx_loader = [], [], []
+            ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
             # with trange(2) as v:
             with trange(len(valDataLoader)) as v:
                 for i in v:
@@ -377,9 +352,12 @@ def train(args):
                     labels = labels.to(args.device)
                     feats, cqcc_outputs = cqcc_model(cqcc)
 
+                    score = torch.norm(feats - loss_model.center, p=2, dim=1).data.item()
+
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
                     tag_loader.append((tags))
+                    score_loader.append(score)
 
                     cqcc_loss = criterion(cqcc_outputs, labels)
 
@@ -417,6 +395,7 @@ def train(args):
 
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\n")
+            scores = torch.cat(score_loader, 0)
 
             if args.visualize and ((epoch_num+1) % 3 == 1):
                 feat = torch.cat(ip1_loader, 0)
