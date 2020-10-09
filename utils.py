@@ -190,7 +190,7 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
                         if dist.item() < score:
                             score = dist.item()
                 else:
-                    score = cqcc_outputs.data[j][0].cpu().numpy()
+                    score = F.softmax(cqcc_outputs.data[j])[0].cpu().numpy()
                 cm_score_file.write(
                     '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",

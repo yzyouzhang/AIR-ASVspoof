@@ -318,8 +318,13 @@ def train(args):
                     desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
                 t.set_description(desc_str)
 
-                with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
-                    log.write(str(epoch_num) + "\t" + str(i) + "\t" + str(np.nanmean(trainlossDict[args.add_loss])) + "\n")
+                if args.add_loss is not None:
+                    with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
+                        log.write(str(epoch_num) + "\t" + str(i) + "\t" + str(np.nanmean(trainlossDict[args.add_loss])) + "\n")
+                else:
+                    with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
+                        log.write(str(epoch_num) + "\t" + str(i) + "\t" + str(
+                            np.nanmean(trainlossDict["feat_loss"])) + "\n")
 
         if args.add_loss == "multicenter_isolate":
             centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model)
@@ -353,8 +358,10 @@ def train(args):
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
                     feats, cqcc_outputs = cqcc_model(cqcc)
-
-                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
+                    if args.add_loss == "isolate":
+                        score = torch.norm(feats - iso_loss.center, p=2, dim=1)
+                    else:
+                        score = cqcc_outputs[:,0]
 
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
