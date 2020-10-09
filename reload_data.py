@@ -9,7 +9,7 @@ import numpy as np
 # local
 # path_to_features = '/home/yzh298/anti-spoofing/ASVspoof2019Features/'
 
-access_type = "PA"
+access_type = "LA"
 # # on air station gpu
 path_to_mat = '/dataNVME/neil/LALFBmat/'
 path_to_audio = '/data/neil/DS_10283_3336/'+access_type+'/ASVspoof2019_'+access_type+'_'
@@ -36,7 +36,7 @@ def reload_data(path_to_features, part):
 def reload_lfb(path_to_features, part):
     matfiles = find_files(path_to_mat + part + '/', ext='mat')
     for i in range(len(matfiles)):
-        key = matfiles[i][len(path_to_mat) + len(part) + 6:-4]
+        key = matfiles[i][len(path_to_mat) + len(part) + 5:-4]
         cqcc = sio.loadmat(matfiles[i], verify_compressed_data_integrity=False)['x']
         with open(path_to_features + part +'/'+ key + 'LFB.pkl', 'wb') as handle1:
             pickle.dump(cqcc, handle1, protocol=pickle.HIGHEST_PROTOCOL)
@@ -93,14 +93,15 @@ def reload_wavform(path_to_audio, path_to_features, part):
         
 
 if __name__ == "__main__":
-    reload_data(path_to_features, 'train')
-    reload_data(path_to_features, 'dev')
-    reload_data(path_to_features, 'eval')
+    # reload_data(path_to_features, 'train')
+    # reload_data(path_to_features, 'dev')
+    # reload_data(path_to_features, 'eval')
     for part in ["train", "dev", "eval"]:
-        reload_mfcc(path_to_audio, path_to_features, part)
-        reload_cqt(path_to_audio, path_to_features, part)
-        reload_stft(path_to_audio, path_to_features, part)
-        reload_melspec(path_to_audio, path_to_features, part)
-        reload_wavform(path_to_audio, path_to_features, part)
+        reload_lfb(path_to_features, part)
+        # reload_mfcc(path_to_audio, path_to_features, part)
+        # reload_cqt(path_to_audio, path_to_features, part)
+        # reload_stft(path_to_audio, path_to_features, part)
+        # reload_melspec(path_to_audio, path_to_features, part)
+        # reload_wavform(path_to_audio, path_to_features, part)
 
 

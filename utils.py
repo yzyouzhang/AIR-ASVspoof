@@ -215,15 +215,13 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
 
     return eer_cm, min_tDCF
 
-def test_fluctuate_eer(feat_model_path, loss_model_path, part, add_loss, visualize=False):
+def test_fluctuate_eer(feat_model_path, loss_model_path, part, add_loss):
     dirname=os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
         dir_path = dirname(dirname(feat_model_path))
-        epoch_num = int(basename.split("_")[-1])
     else:
         dir_path = dirname(feat_model_path)
-        epoch_num = 0
     model = torch.load(feat_model_path)
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
     test_set = ASVspoof2019("LA","/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
@@ -234,21 +232,20 @@ def test_fluctuate_eer(feat_model_path, loss_model_path, part, add_loss, visuali
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
     model.eval()
-    with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
-        for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
-            cqcc = cqcc.unsqueeze(1).float().to(device)
-            feats, cqcc_outputs = model(cqcc)
-            ip1_loader.append(feats.detach().cpu())
-            tags = tags.to(device)
-            tag_loader.append(tags.detach().cpu())
-            labels = labels.to(device)
-            idx_loader.append(labels.detach().cpu())
-            # score = torch.norm(feats - loss_model.center, p=2, dim=1)
-            score = cqcc_outputs[:, 0]
-            score_loader.append(score.detach().cpu())
-        scores = torch.cat(score_loader, 0).data.cpu().numpy()
-        labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-        eer, threshold = em.compute_eer(scores[labels==0], scores[labels==1])
+    for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+        cqcc = cqcc.unsqueeze(1).float().to(device)
+        feats, cqcc_outputs = model(cqcc)
+        ip1_loader.append(feats.detach().cpu())
+        tags = tags.to(device)
+        tag_loader.append(tags.detach().cpu())
+        labels = labels.to(device)
+        idx_loader.append(labels.detach().cpu())
+        # score = torch.norm(feats - loss_model.center, p=2, dim=1)
+        score = cqcc_outputs[:, 0]
+        score_loader.append(score.detach().cpu())
+    scores = torch.cat(score_loader, 0).data.cpu().numpy()
+    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+    eer, threshold = em.compute_eer(scores[labels==0], scores[labels==1])
     return eer
 
 if __name__ == "__main__":
