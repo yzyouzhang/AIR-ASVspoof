@@ -55,6 +55,7 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
+    parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce", "isolate"], help="use which loss for basic training")
     parser.add_argument('--add_loss', type=str, default=None,
                         choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
@@ -130,13 +131,11 @@ def train(args):
     # initialize model
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
-        cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
+        cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1).to(args.device)
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
 
-    # Loss and optimizer
-    criterion = nn.CrossEntropyLoss()
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
@@ -155,6 +154,13 @@ def train(args):
 
     feat, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
+
+    if args.base_loss == "ce":
+        criterion = nn.CrossEntropyLoss()
+    elif args.base_loss == "bce":
+        criterion = nn.BCEWithLogitsLoss()
+    else:
+        assert False
 
     if args.add_loss == "center":
         centerLoss = CenterLoss(2, args.enc_dim).to(args.device)
@@ -210,15 +216,18 @@ def train(args):
             adjust_learning_rate(args, iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         # with trange(2) as t:
+        what = []
+
         with trange(len(trainDataLoader)) as t:
             for i in t:
                 cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
                 cqcc = cqcc.unsqueeze(1).float().to(args.device)
                 tags = tags.to(args.device)
-                labels = labels.to(args.device)
+                labels = labels.unsqueeze(1).float().to(args.device)
                 feats, cqcc_outputs = cqcc_model(cqcc)
                 cqcc_loss = criterion(cqcc_outputs, labels)
-
+                for h in range(args.batch_size):
+                    what.append(audio_fn[h])
                 # Backward and optimize
                 if args.add_loss == None:
                     cqcc_optimizer.zero_grad()
@@ -343,7 +352,9 @@ def train(args):
                 centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
             visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
                       epoch_num + 1, "Train")
-
+        print(len(what))
+        print(len(list(set(what))))
+        assert len(what) == len(list(set(what)))
         # Val the model
         # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
         cqcc_model.eval()
@@ -356,12 +367,13 @@ def train(args):
                     cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                     cqcc = cqcc.unsqueeze(1).float().to(args.device)
                     tags = tags.to(args.device)
-                    labels = labels.to(args.device)
+                    labels = labels.unsqueeze(1).float().to(args.device)
                     feats, cqcc_outputs = cqcc_model(cqcc)
                     if args.add_loss == "isolate":
                         score = torch.norm(feats - iso_loss.center, p=2, dim=1)
                     else:
                         score = cqcc_outputs[:,0]
+                        # print(score.shape)
 
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
@@ -406,7 +418,7 @@ def train(args):
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\n")
             scores = torch.cat(score_loader, 0).data.cpu().numpy()
             labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+            eer = em.compute_eer(scores[labels.squeeze(1) == 0], scores[labels.squeeze(1) == 1])[0]
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\t" + str(eer) +"\n")
             print(eer)
@@ -526,7 +538,7 @@ def test(args, model, loss_model, part='eval'):
             cqcc = cqcc.unsqueeze(1).float().to(args.device)
             feats, cqcc_outputs = model(cqcc)
             tags = tags.to(args.device)
-            labels = labels.to(args.device)
+            labels = labels.unsqueeze(1).float().to(args.device)
             # ip1_loader.append(feats)
             # tag_loader.append(tags)
             # idx_loader.append(labels)
