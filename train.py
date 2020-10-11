@@ -132,6 +132,9 @@ def train(args):
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
+    elif args.model == 'cnn':
+        node_dict = {"CQCC": 10, "Melspec": 15}
+        cqcc_model = model_.CQCC_ConvNet(2, node_dict[args.feat], args.enc_dim, subband_attention=True).to(args.device)
 
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
@@ -219,7 +222,7 @@ def train(args):
         # with trange(len(trainDataLoader)) as t:
         #     for i in t:
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
-            cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
+            # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.unsqueeze(1).float().to(args.device)
             tags = tags.to(args.device)
             if args.base_loss == "bce":
