@@ -33,18 +33,20 @@ def initParams():
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
 
     # Dataset prepare
-    parser.add_argument("--feat", type=str, help="which feature to use", required=True,
-                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB"], default='Melspec')
+    parser.add_argument("--feat", type=str, help="which feature to use", default='Melspec',
+                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=650)
     parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
+    parser.add_argument('--padding', type=str, default='zero', choices=['zero', 'repeat'],
+                        help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=16)
 
-    parser.add_argument('-m', '--model', help='Model arch', required=True,
-                        choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'], default='resnet')
+    parser.add_argument('-m', '--model', help='Model arch', default='resnet',
+                        choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=100, help="Number of epochs for training")
-    parser.add_argument('--batch_size', type=int, default=32, help="Mini batch size for training")
+    parser.add_argument('--batch_size', type=int, default=4, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.8, help="decay learning rate")
     parser.add_argument('--interval', type=int, default=10, help="interval to decay lr")
@@ -111,6 +113,8 @@ def initParams():
             file.write("Start recording training loss ...\n")
         with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
             file.write("Start recording validation loss ...\n")
+        with open(os.path.join(args.out_fold, 'test_loss.log'), 'w') as file:
+            file.write("Start recording test loss ...\n")
 
     args.cuda = torch.cuda.is_available()
     print('Cuda device available: ', args.cuda)
@@ -143,17 +147,22 @@ def train(args):
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
-                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
+                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     genuine_trainset = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, genuine_only=True)
     validation_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
-                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
+                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=training_set.collate_fn)
     genuine_trainDataLoader = DataLoader(genuine_trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=genuine_trainset.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                collate_fn=validation_set.collate_fn)
+
+    test_set = ASVspoof2019(args.path_to_database, args.path_to_features, args.path_to_protocol, "eval",
+                            args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
+                                collate_fn=test_set.collate_fn)
 
     feat, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
@@ -188,9 +197,9 @@ def train(args):
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
     if args.add_loss == "ang_iso":
-        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=10).to(args.device)
+        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=20.0).to(args.device)
         ang_iso.train()
-        ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=0.01)
+        ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
     if args.add_loss == "multi_isolate":
         multi_iso_loss = MultiIsolateCenterLoss(args.enc_dim, args.num_centers, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
@@ -214,9 +223,12 @@ def train(args):
         cqcc_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
+        testlossDict = defaultdict(list)
         adjust_learning_rate(args, cqcc_optimizer, epoch_num)
         if args.add_loss == "isolate":
             adjust_learning_rate(args, iso_optimzer, epoch_num)
+        if args.add_loss == "ang_iso":
+            adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         # with trange(2) as t:
         # with trange(len(trainDataLoader)) as t:
@@ -265,7 +277,7 @@ def train(args):
                 iso_optimzer.step()
 
             if args.add_loss == "ang_iso":
-                ang_isoloss = ang_iso(feats, labels)
+                ang_isoloss, _ = ang_iso(feats, labels)
                 trainlossDict["feat"].append(cqcc_loss.item())
                 cqcc_loss = ang_isoloss * args.weight_loss
                 cqcc_optimizer.zero_grad()
@@ -378,17 +390,15 @@ def train(args):
                     labels = labels.unsqueeze(1).float().to(args.device)
                 else:
                     labels = labels.to(args.device)
+
                 feats, cqcc_outputs = cqcc_model(cqcc)
-                if args.add_loss == "isolate":
-                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
-                else:
-                    score = cqcc_outputs[:,0]
-                    # print(score.shape)
+
+                score = cqcc_outputs[:,0]
+                # print(score.shape)
 
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
                 tag_loader.append((tags))
-                score_loader.append(score)
 
                 cqcc_loss = criterion(cqcc_outputs, labels)
 
@@ -405,9 +415,10 @@ def train(args):
                     # cqcc_correct += (cqcc_predicted == labels).sum().item()
                 elif args.add_loss == "isolate":
                     isoloss = iso_loss(feats, labels)
+                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
                     devlossDict["iso_loss"].append(isoloss.item())
                 elif args.add_loss == "ang_iso":
-                    ang_isoloss = ang_iso(feats, labels)
+                    ang_isoloss, score = ang_iso(feats, labels)
                     devlossDict["ang_iso"].append(ang_isoloss.item())
                 elif args.add_loss == "multi_isolate":
                     multi_isoloss = multi_iso_loss(feats, labels)
@@ -419,6 +430,8 @@ def train(args):
                 #     print('Epoch [{}/{}], Step [{}/{}], cqcc_accuracy {:.4f} %'.format(
                 #         epoch_num + 1, args.num_epochs, k + 1, len(valDataLoader), (100 * cqcc_correct / total)))
 
+                score_loader.append(score)
+
                 desc_str = ''
                 for key in sorted(devlossDict.keys()):
                     desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
@@ -428,12 +441,16 @@ def train(args):
             labels = torch.cat(idx_loader, 0).data.cpu().numpy()
             if args.base_loss == "bce":
                 eer = em.compute_eer(scores[labels.squeeze(1) == 0], scores[labels.squeeze(1) == 1])[0]
+                other_eer = em.compute_eer(-scores[labels.squeeze(1) == 0], -scores[labels.squeeze(1) == 1])[0]
+                eer = min(eer, other_eer)
             else:
                 eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                eer = min(eer, other_eer)
 
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[key])) + "\t" + str(eer) +"\n")
-            print(eer)
+            print("Val EER: {}".format(eer))
 
             if args.visualize and ((epoch_num+1) % 3 == 1):
                 feat = torch.cat(ip1_loader, 0)
@@ -449,74 +466,153 @@ def train(args):
                 visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
                           epoch_num + 1, "Dev")
 
-            valLoss = np.nanmean(devlossDict[key])
-            # if args.add_loss == "isolate":
-            #     print("isolate center: ", iso_loss.center.data)
-            if (epoch_num + 1) % 2 == 0:
-                torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num+1)))
-                if args.add_loss == "center":
-                    loss_model = centerLoss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-                elif args.add_loss == "isolate":
-                    loss_model = iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-                elif args.add_loss == "ang_iso":
-                    loss_model = ang_iso
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-                elif args.add_loss == "multi_isolate":
-                    loss_model = multi_iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                        'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-                elif args.add_loss == "multicenter_isolate":
-                    loss_model = multicenter_iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-                elif args.add_loss == "lgm":
-                    loss_model = lgm_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-                elif args.add_loss == "lgcl":
-                    loss_model = lgcl_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_%d.pt' % (epoch_num+1)))
-                else:
-                    loss_model = None
 
-            if valLoss < prev_loss:
-                # Save the model checkpoint
-                torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
-                if args.add_loss == "center":
-                    loss_model = centerLoss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "isolate":
-                    loss_model = iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "ang_iso":
-                    loss_model = ang_iso
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "multi_isolate":
-                    loss_model = multi_iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "multicenter_isolate":
-                    loss_model = multicenter_iso_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "lgm":
-                    loss_model = lgm_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-                elif args.add_loss == "lgcl":
-                    loss_model = lgcl_loss
-                    torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+        with torch.no_grad():
+            ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+            for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+                cqcc = cqcc.unsqueeze(1).float().to(args.device)
+                tags = tags.to(args.device)
+                if args.base_loss == "bce":
+                    labels = labels.unsqueeze(1).float().to(args.device)
                 else:
-                    loss_model = None
-                prev_loss = valLoss
-                early_stop_cnt = 0
+                    labels = labels.to(args.device)
+
+                feats, cqcc_outputs = cqcc_model(cqcc)
+
+                score = cqcc_outputs[:, 0]
+                # print(score.shape)
+
+                ip1_loader.append(feats)
+                idx_loader.append((labels))
+                tag_loader.append((tags))
+
+                cqcc_loss = criterion(cqcc_outputs, labels)
+
+                if args.add_loss in [None, "center", "lgcl"]:
+                    testlossDict["feat_loss"].append(cqcc_loss.item())
+                    # _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
+                    # total += labels.size(0)
+                    # cqcc_correct += (cqcc_predicted == labels).sum().item()
+                elif args.add_loss == "lgm":
+                    testlossDict["feat_loss"].append(cqcc_loss.item())
+                    # outputs, moutputs, likelihood = lgm_loss(feats, labels)
+                    # _, cqcc_predicted = torch.max(outputs.data, 1)
+                    # total += labels.size(0)
+                    # cqcc_correct += (cqcc_predicted == labels).sum().item()
+                elif args.add_loss == "isolate":
+                    isoloss = iso_loss(feats, labels)
+                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
+                    testlossDict["iso_loss"].append(isoloss.item())
+                elif args.add_loss == "ang_iso":
+                    ang_isoloss, score = ang_iso(feats, labels)
+                    testlossDict["ang_iso"].append(ang_isoloss.item())
+                elif args.add_loss == "multi_isolate":
+                    multi_isoloss = multi_iso_loss(feats, labels)
+                    testlossDict["multi_iso_loss"].append(multi_isoloss.item())
+                elif args.add_loss == "multicenter_isolate":
+                    multiisoloss = multicenter_iso_loss(feats, labels)
+                    testlossDict["multiiso"].append(multiisoloss.item())
+                # if (k+1) % 10 == 0:
+                #     print('Epoch [{}/{}], Step [{}/{}], cqcc_accuracy {:.4f} %'.format(
+                #         epoch_num + 1, args.num_epochs, k + 1, len(valDataLoader), (100 * cqcc_correct / total)))
+
+                score_loader.append(score)
+
+                desc_str = ''
+                for key in sorted(testlossDict.keys()):
+                    desc_str += key + ':%.5f' % (np.nanmean(testlossDict[key])) + ', '
+                # v.set_description(desc_str)
+                print(desc_str)
+            scores = torch.cat(score_loader, 0).data.cpu().numpy()
+            labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+            if args.base_loss == "bce":
+                eer = em.compute_eer(scores[labels.squeeze(1) == 0], scores[labels.squeeze(1) == 1])[0]
+                other_eer = em.compute_eer(-scores[labels.squeeze(1) == 0], -scores[labels.squeeze(1) == 1])[0]
+                eer = min(eer, other_eer)
             else:
-                early_stop_cnt += 1
+                eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                eer = min(eer, other_eer)
 
-            if early_stop_cnt == 50:
-                with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
-                    res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
-                break
-            # if early_stop_cnt == 1:
-            #     torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')
+            with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
+                log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[key])) + "\t" + str(eer) + "\n")
+            print("Test EER: {}".format(eer))
+
+
+        valLoss = np.nanmean(devlossDict[key])
+        # if args.add_loss == "isolate":
+        #     print("isolate center: ", iso_loss.center.data)
+        if (epoch_num + 1) % 2 == 0:
+            torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint',
+                                                'anti-spoofing_cqcc_model_%d.pt' % (epoch_num + 1)))
+            if args.add_loss == "center":
+                loss_model = centerLoss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            elif args.add_loss == "isolate":
+                loss_model = iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            elif args.add_loss == "ang_iso":
+                loss_model = ang_iso
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            elif args.add_loss == "multi_isolate":
+                loss_model = multi_iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            elif args.add_loss == "multicenter_isolate":
+                loss_model = multicenter_iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            elif args.add_loss == "lgm":
+                loss_model = lgm_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            elif args.add_loss == "lgcl":
+                loss_model = lgcl_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+            else:
+                loss_model = None
+
+        if valLoss < prev_loss:
+            # Save the model checkpoint
+            torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
+            if args.add_loss == "center":
+                loss_model = centerLoss
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            elif args.add_loss == "isolate":
+                loss_model = iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            elif args.add_loss == "ang_iso":
+                loss_model = ang_iso
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            elif args.add_loss == "multi_isolate":
+                loss_model = multi_iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            elif args.add_loss == "multicenter_isolate":
+                loss_model = multicenter_iso_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            elif args.add_loss == "lgm":
+                loss_model = lgm_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            elif args.add_loss == "lgcl":
+                loss_model = lgcl_loss
+                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
+            else:
+                loss_model = None
+            prev_loss = valLoss
+            early_stop_cnt = 0
+        else:
+            early_stop_cnt += 1
+
+        if early_stop_cnt == 100:
+            with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
+                res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
+            break
+        # if early_stop_cnt == 1:
+        #     torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')
 
             # print('Dev Accuracy of the model on the val features: {} % '.format(100 * cqcc_correct / total))
 
