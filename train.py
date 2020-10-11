@@ -240,15 +240,14 @@ def train(args):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.unsqueeze(1).float().to(args.device)
             tags = tags.to(args.device)
-            if args.base_loss == "bce":
-                labels = labels.unsqueeze(1).float().to(args.device)
-            else:
-                labels = labels.to(args.device)
+            labels = labels.to(args.device)
+
             feats, cqcc_outputs = cqcc_model(cqcc)
-            cqcc_loss = criterion(cqcc_outputs, labels)
-            # for h in range(args.batch_size):
-            #     what.append(audio_fn[h])
-            # Backward and optimize.
+
+            if args.base_loss == "bce":
+                cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+            else:
+                cqcc_loss = criterion(cqcc_outputs, labels)
 
             trainlossDict["base_loss"].append(cqcc_loss.item())
 
@@ -381,21 +380,20 @@ def train(args):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 cqcc = cqcc.unsqueeze(1).float().to(args.device)
                 tags = tags.to(args.device)
-                if args.base_loss == "bce":
-                    labels = labels.unsqueeze(1).float().to(args.device)
-                else:
-                    labels = labels.to(args.device)
+                labels = labels.to(args.device)
 
                 feats, cqcc_outputs = cqcc_model(cqcc)
 
-                score = cqcc_outputs[:,0]
-                # print(score.shape)
+                if args.base_loss == "bce":
+                    cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+                    score = cqcc_outputs[:, 0]
+                else:
+                    cqcc_loss = criterion(cqcc_outputs, labels)
+                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
 
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
                 tag_loader.append((tags))
-
-                cqcc_loss = criterion(cqcc_outputs, labels)
 
                 if args.add_loss in [None, "center", "lgcl"]:
                     devlossDict["base_loss"].append(cqcc_loss.item())
@@ -434,14 +432,9 @@ def train(args):
                 # print(desc_str)
             scores = torch.cat(score_loader, 0).data.cpu().numpy()
             labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-            if args.base_loss == "bce" and args.add_loss is None:
-                eer = em.compute_eer(scores[labels.squeeze(1) == 0], scores[labels.squeeze(1) == 1])[0]
-                other_eer = em.compute_eer(-scores[labels.squeeze(1) == 0], -scores[labels.squeeze(1) == 1])[0]
-                eer = min(eer, other_eer)
-            else:
-                eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-                other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-                eer = min(eer, other_eer)
+            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+            other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+            eer = min(eer, other_eer)
 
             with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[monitor_loss])) + "\t" + str(eer) +"\n")
@@ -467,21 +460,20 @@ def train(args):
             for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
                 cqcc = cqcc.unsqueeze(1).float().to(args.device)
                 tags = tags.to(args.device)
-                if args.base_loss == "bce":
-                    labels = labels.unsqueeze(1).float().to(args.device)
-                else:
-                    labels = labels.to(args.device)
+                labels = labels.to(args.device)
 
                 feats, cqcc_outputs = cqcc_model(cqcc)
 
-                score = cqcc_outputs[:, 0]
-                # print(score.shape)
+                if args.base_loss == "bce":
+                    cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+                    score = cqcc_outputs[:, 0]
+                else:
+                    cqcc_loss = criterion(cqcc_outputs, labels)
+                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
 
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
                 tag_loader.append((tags))
-
-                cqcc_loss = criterion(cqcc_outputs, labels)
 
                 if args.add_loss in [None, "center", "lgcl"]:
                     testlossDict["base_loss"].append(cqcc_loss.item())
@@ -520,14 +512,9 @@ def train(args):
                 # print(desc_str)
             scores = torch.cat(score_loader, 0).data.cpu().numpy()
             labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-            if args.base_loss == "bce" and args.add_loss is None:
-                eer = em.compute_eer(scores[labels.squeeze(1) == 0], scores[labels.squeeze(1) == 1])[0]
-                other_eer = em.compute_eer(-scores[labels.squeeze(1) == 0], -scores[labels.squeeze(1) == 1])[0]
-                eer = min(eer, other_eer)
-            else:
-                eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-                other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-                eer = min(eer, other_eer)
+            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+            other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+            eer = min(eer, other_eer)
 
             with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
