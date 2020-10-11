@@ -11,7 +11,8 @@ import pandas as pd
 torch.set_default_tensor_type(torch.FloatTensor)
 
 class ASVspoof2019(Dataset):
-    def __init__(self, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC', genuine_only=False, feat_len=650, pad_chop=True):
+    def __init__(self, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC',
+                 genuine_only=False, feat_len=650, pad_chop=True, padding='zero'):
         self.ptd = path_to_database
         self.path_to_features = path_to_features
         self.part = part
@@ -22,9 +23,10 @@ class ASVspoof2019(Dataset):
         self.feature = feature
         self.pad_chop = pad_chop
         self.path_to_protocol = path_to_protocol
+        self.padding = padding
         protocol = os.path.join(self.path_to_protocol, 'ASVspoof2019.LA.cm.'+ self.part + '.trl.txt')
         if self.part == "eval":
-            protocol = self.ptd + 'LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.' + self.part + '.trl.txt'
+            protocol = os.path.join(self.ptd, 'LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.' + self.part + '.trl.txt')
         self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
                       "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
                       "A19": 19}
@@ -58,51 +60,58 @@ class ASVspoof2019(Dataset):
             with open(os.path.join(self.path_to_features, the_other(self.part)) + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
                 feat_mat = pickle.load(feature_handle)
 
+        feat_mat = torch.from_numpy(feat_mat)
         this_feat_len = feat_mat.shape[1]
         # assert self.csv.at[idx, "feat_len"] == feat_mat.shape[1]
         if this_feat_len > self.feat_len:
             startp = np.random.randint(this_feat_len-self.feat_len)
             feat_mat = feat_mat[:, startp:startp+self.feat_len]
+        if this_feat_len < self.feat_len:
+            if self.padding == 'zero':
+                feat_mat = padding(feat_mat, self.feat_len)
+            elif self.padding == 'repeat':
+                feat_mat = repeat_padding(feat_mat, self.feat_len)
+            else:
+                raise ValueError('Padding should be zero or repeat!')
 
-        return torch.from_numpy(feat_mat), filename, self.tag[tag], self.label[label]
+        return feat_mat, filename, self.tag[tag], self.label[label]
 
     def collate_fn(self, samples):
-        # return default_collate(samples)
-        # from torch.utils.data.dataloader import default_collate
-        if self.pad_chop:
-            feat_mat_lst, audio_fn_lst, tag_lst, label_lst = [], [], [], []
-            for sample in samples:
-                feat_mat, audio_fn, tag, label = sample
-                if feat_mat.shape[1] % self.feat_len < self.feat_len * 0.5:
-                    num_of_items = feat_mat.shape[1] // self.feat_len
-                    for i in range(num_of_items):
-                        feat_mat_lst.append(feat_mat[:, self.feat_len * i: self.feat_len * (i + 1)])
-                        audio_fn_lst.append(audio_fn)
-                        tag_lst.append(tag)
-                        label_lst.append(label)
-                else:
-                    num_of_items = feat_mat.shape[1] // self.feat_len + 1
-                    for i in range(num_of_items - 1):
-                        feat_mat_lst.append(feat_mat[:, self.feat_len * i: self.feat_len * (i + 1)])
-                        audio_fn_lst.append(audio_fn)
-                        tag_lst.append(tag)
-                        label_lst.append(label)
-                    feat_mat_lst.append(padding(feat_mat[:, self.feat_len * (num_of_items - 1):], self.feat_len))
-                    audio_fn_lst.append(audio_fn)
-                    tag_lst.append(tag)
-                    label_lst.append(label)
-
-            return default_collate(feat_mat_lst), default_collate(audio_fn_lst), \
-                   default_collate(tag_lst), default_collate(label_lst)
-        else:
-            feat_mat = [sample[0].transpose(0, 1) for sample in samples]
-            from torch.nn.utils.rnn import pad_sequence
-            feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
-            audio_fn = [sample[1] for sample in samples]
-            tag = [sample[2] for sample in samples]
-            label = [sample[3] for sample in samples]
-
-            return feat_mat, default_collate(audio_fn), default_collate(tag), default_collate(label)
+        return default_collate(samples)
+        # if self.pad_chop:
+        #     feat_mat_lst, audio_fn_lst, tag_lst, label_lst = [], [], [], []
+        #     for sample in samples:
+        #         feat_mat, audio_fn, tag, label = sample
+        #         if feat_mat.shape[1] % self.feat_len < self.feat_len * 0.5:
+        #             num_of_items = feat_mat.shape[1] // self.feat_len
+        #             for i in range(num_of_items):
+        #                 feat_mat_lst.append(feat_mat[:, self.feat_len * i: self.feat_len * (i + 1)])
+        #                 audio_fn_lst.append(audio_fn)
+        #                 tag_lst.append(tag)
+        #                 label_lst.append(label)
+        #         else:
+        #             num_of_items = feat_mat.shape[1] // self.feat_len + 1
+        #             for i in range(num_of_items - 1):
+        #                 feat_mat_lst.append(feat_mat[:, self.feat_len * i: self.feat_len * (i + 1)])
+        #                 audio_fn_lst.append(audio_fn)
+        #                 tag_lst.append(tag)
+        #                 label_lst.append(label)
+        #             feat_mat_lst.append(padding(feat_mat[:, self.feat_len * (num_of_items - 1):], self.feat_len))
+        #             audio_fn_lst.append(audio_fn)
+        #             tag_lst.append(tag)
+        #             label_lst.append(label)
+        #
+        #     return default_collate(feat_mat_lst), default_collate(audio_fn_lst), \
+        #            default_collate(tag_lst), default_collate(label_lst)
+        # else:
+        #     feat_mat = [sample[0].transpose(0, 1) for sample in samples]
+        #     from torch.nn.utils.rnn import pad_sequence
+        #     feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
+        #     audio_fn = [sample[1] for sample in samples]
+        #     tag = [sample[2] for sample in samples]
+        #     label = [sample[3] for sample in samples]
+        #
+        #     return feat_mat, default_collate(audio_fn), default_collate(tag), default_collate(label)
 
 
 def padding(spec, ref_len):
@@ -111,7 +120,10 @@ def padding(spec, ref_len):
     padd_len = ref_len - cur_len
     return torch.cat((spec, torch.zeros(width, padd_len, dtype=spec.dtype)), 1)
 
-# def
+def repeat_padding(spec, ref_len):
+    mul = int(np.ceil(ref_len / spec.shape[1]))
+    spec = spec.repeat(1, mul)[:, :ref_len]
+    return spec
 
 
 if __name__ == "__main__":
