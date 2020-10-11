@@ -44,7 +44,7 @@ class SelfAttention(nn.Module):
 
 
 class CQCC_ConvNet(nn.Module):
-    def __init__(self, num_classes=2, num_nodes=512, subband_attention=False):
+    def __init__(self, num_classes=2, num_nodes=512, enc_dim=2, subband_attention=False):
         super(CQCC_ConvNet, self).__init__()
 
         # self.layer1 = nn.Sequential(
@@ -96,8 +96,8 @@ class CQCC_ConvNet(nn.Module):
         )
 
         self.fc1 = nn.Linear(num_nodes, 256)
-        self.fc2 = nn.Linear(256, 2)
-        self.fc3 = nn.Linear(2, num_classes)
+        self.fc2 = nn.Linear(256, enc_dim)
+        self.fc3 = nn.Linear(enc_dim, num_classes)
         # self.dropout = nn.Dropout(0.2)
 
         self.subband_attention = subband_attention
