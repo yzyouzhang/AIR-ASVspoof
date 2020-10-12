@@ -110,7 +110,7 @@ class AngularIsoLoss(nn.Module):
         # loss = self.softplus(torch.logsumexp(self.alpha * scores[labels == 0], dim=0)) + \
         #        self.softplus(torch.logsumexp(self.alpha * scores[labels == 1], dim=0))
 
-        return loss, -output_scores
+        return loss, -output_scores.squeeze(1)
 
 class IsolateLoss(nn.Module):
     """Isolate loss.
