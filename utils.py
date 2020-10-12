@@ -21,6 +21,44 @@ import eval_metrics as em
 # r 0.2 0.9
 # Adam SGD
 
+def compare_exps(exp_dirs, root_dir='/home/neil/AIR-ASVspoof/experiments'):
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 8))
+    for folder in exp_dirs:
+        out_fold = os.path.join(root_dir, folder)
+        train_log_file = os.path.join(out_fold, "train_loss.log")
+        dev_log_file = os.path.join(out_fold, "dev_loss.log")
+        with open(train_log_file, "r") as train_log:
+            x = np.array([[float(i) for i in line[0:-1].split('\t')] for line in train_log.readlines()[1:]])
+            it_per_batch = int(x[:, 1].max()) + 1
+            x = x[it_per_batch - 1::it_per_batch]
+            ax1.plot(range(1, len(x) + 1), x[:, 2])
+            #     ax1.set_xticks(np.where(x[:,1]==0)[0][::10])
+            #     ax1.set_xticklabels(np.arange(np.sum(x[:,1]==0))*10)
+            ax1.set_title("Training Loss")
+            ax1.grid()
+            ax1.legend(exp_dirs)
+        with open(dev_log_file, "r") as dev_log:
+            x = np.array([[float(i) for i in line[0:-1].split('\t')] for line in dev_log.readlines()[1:]])
+            ax2.plot(range(1, len(x) + 1), x[:, 1])
+            ax2.set_title("Validation Loss")
+            ax2.legend(exp_dirs)
+
+            ax3.plot(range(1, len(x) + 1), x[:, 2])
+            ax3.set_title("Validation EER")
+            ax3.minorticks_on()
+            ax3.grid(b=True, which='major', linestyle='-')
+            ax3.grid(b=True, which='minor', linestyle=':')
+            ax3.legend(exp_dirs)
+        with open(os.path.join(out_fold, "test_loss.log"), "r") as dev_eer:
+            x = np.array([[float(i) for i in line[0:-1].split('\t')] for line in dev_eer.readlines()[1:]])
+            ax4.plot(range(1, len(x) + 1), x[:, 2])
+            ax4.set_title("Test EER")
+            ax4.minorticks_on()
+            ax4.grid(b=True, which='major', linestyle='-')
+            ax4.grid(b=True, which='minor', linestyle=':')
+            ax4.legend(exp_dirs)
+    plt.show()
+
 def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
     # visualize which experiemnt which epoch
     fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(12, 8))
