@@ -34,7 +34,7 @@ def initParams():
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", default='Melspec',
-                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB"])
+                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=650)
     parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='zero', choices=['zero', 'repeat'],
@@ -63,6 +63,7 @@ def initParams():
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
+    parser.add_argument('--alpha', type=float, default=20.0, help="scale factor for angular isolate loss")
     parser.add_argument('--num_centers', type=int, default=3, help="num of centers for multi isolate loss")
 
     parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
@@ -134,7 +135,7 @@ def train(args):
 
     # initialize model
     if args.model == 'resnet':
-        node_dict = {"CQCC": 4, "LFCC": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
+        node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
     elif args.model == 'cnn':
         node_dict = {"CQCC": 10, "Melspec": 15}
@@ -197,7 +198,7 @@ def train(args):
         iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
 
     if args.add_loss == "ang_iso":
-        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=20.0).to(args.device)
+        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
         ang_iso.train()
         ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
