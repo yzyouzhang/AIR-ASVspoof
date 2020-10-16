@@ -262,7 +262,7 @@ def train(args):
                 cqcc_loss += centerloss * args.weight_loss
                 cqcc_optimizer.zero_grad()
                 center_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(centerloss.item())
+                trainlossDict[args.add_loss].append(cqcc_loss.item())
                 cqcc_loss.backward()
                 cqcc_optimizer.step()
                 # for param in centerLoss.parameters():

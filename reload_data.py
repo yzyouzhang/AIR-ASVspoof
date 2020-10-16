@@ -11,7 +11,7 @@ import numpy as np
 
 access_type = "LA"
 # # on air station gpu
-path_to_mat = '/dataNVME/neil/LALFBmat/'
+path_to_mat = '/data/neil/LALFBBmat/'
 path_to_audio = '/data/neil/DS_10283_3336/'+access_type+'/ASVspoof2019_'+access_type+'_'
 path_to_features = '/dataNVME/neil/ASVspoof2019'+access_type+'Features/'
 # on son gpu
@@ -40,6 +40,14 @@ def reload_lfb(path_to_features, part):
         cqcc = sio.loadmat(matfiles[i], verify_compressed_data_integrity=False)['x']
         with open(path_to_features + part +'/'+ key + 'LFB.pkl', 'wb') as handle1:
             pickle.dump(cqcc, handle1, protocol=pickle.HIGHEST_PROTOCOL)
+
+def reload_lfbb(path_to_features, part):
+    matfiles = find_files(path_to_mat + part + '/', ext='mat')
+    for i in range(len(matfiles)):
+        key = matfiles[i][len(path_to_mat) + len(part) + 6:-4]
+        cqcc = sio.loadmat(matfiles[i], verify_compressed_data_integrity=False)['x']
+        with open(path_to_features + part +'/'+ key + 'LFBB.pkl', 'wb') as handle0:
+            pickle.dump(cqcc, handle0, protocol=pickle.HIGHEST_PROTOCOL)
 
 def reload_mfcc(path_to_audio, path_to_features, part):
     audiofiles = find_files(path_to_audio + part + '/flac/', ext='flac')
@@ -97,7 +105,7 @@ if __name__ == "__main__":
     # reload_data(path_to_features, 'dev')
     # reload_data(path_to_features, 'eval')
     for part in ["train", "dev", "eval"]:
-        reload_lfb(path_to_features, part)
+        reload_lfbb(path_to_features, part)
         # reload_mfcc(path_to_audio, path_to_features, part)
         # reload_cqt(path_to_audio, path_to_features, part)
         # reload_stft(path_to_audio, path_to_features, part)
