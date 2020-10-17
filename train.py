@@ -57,9 +57,9 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce", "isolate"], help="use which loss for basic training")
+    parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce"], help="use which loss for basic training")
     parser.add_argument('--add_loss', type=str, default=None,
-                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
+                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
@@ -195,7 +195,14 @@ def train(args):
         if args.continue_training:
             iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
         iso_loss.train()
-        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=0.01)
+        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=args.lr)
+
+    if args.add_loss == "iso_sq":
+        iso_loss = IsolateSquareLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
+        if args.continue_training:
+            iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
+        iso_loss.train()
+        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=args.lr)
 
     if args.add_loss == "ang_iso":
         ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
@@ -269,7 +276,7 @@ def train(args):
                 #     param.grad.data *= (1. / args.weight_loss)
                 center_optimzer.step()
 
-            if args.add_loss == "isolate":
+            if args.add_loss in ["isolate", "iso_sq"]:
                 isoloss = iso_loss(feats, labels)
                 cqcc_loss = isoloss * args.weight_loss
                 cqcc_optimizer.zero_grad()
@@ -356,7 +363,7 @@ def train(args):
             feat = torch.cat(ip1_loader, 0)
             labels = torch.cat(idx_loader, 0)
             tags = torch.cat(tag_loader, 0)
-            if args.add_loss == "isolate":
+            if args.add_loss in ["isolate", "iso_sq"]:
                 centers = iso_loss.center
             elif args.add_loss == "multi_isolate":
                 centers = multi_iso_loss.centers
@@ -407,7 +414,7 @@ def train(args):
                     # _, cqcc_predicted = torch.max(outputs.data, 1)
                     # total += labels.size(0)
                     # cqcc_correct += (cqcc_predicted == labels).sum().item()
-                elif args.add_loss == "isolate":
+                elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
                     devlossDict[args.add_loss].append(isoloss.item())
@@ -487,7 +494,7 @@ def train(args):
                     # _, cqcc_predicted = torch.max(outputs.data, 1)
                     # total += labels.size(0)
                     # cqcc_correct += (cqcc_predicted == labels).sum().item()
-                elif args.add_loss == "isolate":
+                elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
                     testlossDict[args.add_loss].append(isoloss.item())
@@ -532,7 +539,7 @@ def train(args):
                 loss_model = centerLoss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "isolate":
+            elif args.add_loss in ["isolate", "iso_sq"]:
                 loss_model = iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
@@ -565,7 +572,7 @@ def train(args):
             if args.add_loss == "center":
                 loss_model = centerLoss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "isolate":
+            elif args.add_loss in ["isolate", "iso_sq"]:
                 loss_model = iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             elif args.add_loss == "ang_iso":
@@ -656,7 +663,7 @@ def test(args, model, loss_model, part='eval'):
             #     print('Step [{}/{}] '.format(i + 1, len(testDataLoader)))
                 # print('Test Accuracy of the model on the eval features: {} %'.format(100 * cqcc_correct / total))
             for j in range(labels.size(0)):
-                if args.add_loss == "isolate":
+                if args.add_loss in ["isolate", "iso_sq"]:
                     score = torch.norm(feats[j].unsqueeze(0) - loss_model.center, p=2, dim=1).data.item()
                 elif args.add_loss == "ang_iso":
                     score = F.normalize(feats[j].unsqueeze(0), p=2, dim=1) @ F.normalize(loss_model.center, p=2, dim=1).T
