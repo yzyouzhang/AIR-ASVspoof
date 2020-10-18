@@ -73,7 +73,7 @@ def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
     num_centers, enc_dim = center.shape
     if enc_dim > 2:
         X = np.concatenate((center, feat), axis=0)
-        X_tsne = TSNE(random_state=999).fit_transform(X)
+        X_tsne = TSNE(random_state=999, perplexity=40, early_exaggeration=100).fit_transform(X)
         center = X_tsne[:num_centers]
         feat = X_tsne[num_centers:]
         pca = PCA(n_components=2)
@@ -181,7 +181,8 @@ def create_new_split(df_train, df_dev, split_dict):
                 else:
                     new_split_dev_file.write('%s %s - %s spoof\n' % (speaker, filename, attack))
 
-def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
+
+def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss, vis=False):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -194,97 +195,107 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss):
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
     test_set = ASVspoof2019("LA", "/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
-                            "Melspec", feat_len=750, pad_chop=False)
-    testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0,
+                            "LFCC", feat_len=750, pad_chop=False, padding="repeat")
+    testDataLoader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=0,
                                 collate_fn=test_set.collate_fn)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ip1_loader, tag_loader, idx_loader = [], [], []
     model.eval()
+
     with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
+        ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
             cqcc = cqcc.unsqueeze(1).float().to(device)
-            feats, cqcc_outputs = model(cqcc)
-            ip1_loader.append(feats.detach().cpu())
             tags = tags.to(device)
-            tag_loader.append(tags.detach().cpu())
             labels = labels.to(device)
-            idx_loader.append(labels.detach().cpu())
+
+            feats, cqcc_outputs = model(cqcc)
+
+            score = cqcc_outputs[:, 0]
+
+            ip1_loader.append(feats.detach().cpu())
+            idx_loader.append((labels.detach().cpu()))
+            tag_loader.append((tags.detach().cpu()))
+
+            if add_loss in ["isolate", "iso_sq"]:
+                score = torch.norm(feats - loss_model.center, p=2, dim=1)
+            elif add_loss == "ang_iso":
+                ang_isoloss, score = loss_model(feats, labels)
+
             for j in range(labels.size(0)):
-                if add_loss == "isolate":
-                    score = torch.norm(feats[j].unsqueeze(0) - loss_model.center, p=2, dim=1).data.item()
-                elif add_loss == "ang_iso":
-                    score = F.normalize(feats[j].unsqueeze(0), p=2, dim=1) @ F.normalize(loss_model.center, p=2,
-                                                                                         dim=1).T
-                    score = score.data.item()
-                elif add_loss == "multi_isolate":
-                    genuine_dist = torch.norm((feats[j].unsqueeze(0).repeat(args.num_centers, 1) - loss_model.centers),
-                                              p=2, dim=1)
-                    score, indices = torch.min(genuine_dist, dim=-1)
-                    score = score.item()
-                elif add_loss == "multicenter_isolate":
-                    score = 1e8
-                    for k in range(loss_model.centers.shape[0]):
-                        dist = torch.norm(feats[j] - loss_model.centers[k].unsqueeze(0), p=2, dim=1)
-                        if dist.item() < score:
-                            score = dist.item()
-                else:
-                    score = F.softmax(cqcc_outputs.data[j])[0].cpu().numpy()
                 cm_score_file.write(
                     '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",
-                                          score))
+                                          score[j].item()))
+
     eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(dir_path, 'checkpoint_cm_score.txt'),
                                             "/data/neil/DS_10283_3336/")
-    feat = torch.cat(ip1_loader, 0)
-    labels = torch.cat(idx_loader, 0)
-    tags = torch.cat(tag_loader, 0)
-    if add_loss == "isolate":
-        centers = loss_model.center
-    elif add_loss == "multi_isolate":
-        centers = loss_model.centers
-    elif add_loss == "ang_iso":
-        centers = loss_model.center
-    else:
-        centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
-    torch.save(feat, os.path.join(dir_path, 'feat_%d.pt' % epoch_num))
-    torch.save(tags, os.path.join(dir_path, 'tags_%d.pt' % epoch_num))
-    visualize(feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(),
-              centers.data.cpu().numpy(), epoch_num, part, dir_path)
+
+    if vis:
+        feat = torch.cat(ip1_loader, 0)
+        labels = torch.cat(idx_loader, 0)
+        tags = torch.cat(tag_loader, 0)
+        if add_loss == "isolate":
+            centers = loss_model.center
+        elif add_loss == "multi_isolate":
+            centers = loss_model.centers
+        elif add_loss == "ang_iso":
+            centers = loss_model.center
+        else:
+            centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
+        torch.save(feat, os.path.join(dir_path, 'feat_%d.pt' % epoch_num))
+        torch.save(tags, os.path.join(dir_path, 'tags_%d.pt' % epoch_num))
+        visualize(feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(),
+                  centers.data.cpu().numpy(), epoch_num, part, dir_path)
 
     return eer_cm, min_tDCF
 
-def test_fluctuate_eer(feat_model_path, loss_model_path, part, add_loss):
-    dirname=os.path.dirname
-    basename = os.path.splitext(os.path.basename(feat_model_path))[0]
-    if "checkpoint" in dirname(feat_model_path):
-        dir_path = dirname(dirname(feat_model_path))
-    else:
-        dir_path = dirname(feat_model_path)
+def get_features(feat_model_path, part):
     model = torch.load(feat_model_path)
-    loss_model = torch.load(loss_model_path) if add_loss is not None else None
-    test_set = ASVspoof2019("LA","/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
+    dataset = ASVspoof2019("LA", "/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
-                            "Melspec", feat_len=750, pad_chop=False)
-    testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0,
-                                collate_fn=test_set.collate_fn)
+                            "LFCC", feat_len=750, pad_chop=False, padding="repeat")
+    dataLoader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=0,
+                                collate_fn=dataset.collate_fn)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
     model.eval()
-    for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+    ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+    for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(dataLoader)):
         cqcc = cqcc.unsqueeze(1).float().to(device)
-        feats, cqcc_outputs = model(cqcc)
-        ip1_loader.append(feats.detach().cpu())
         tags = tags.to(device)
-        tag_loader.append(tags.detach().cpu())
         labels = labels.to(device)
-        idx_loader.append(labels.detach().cpu())
-        # score = torch.norm(feats - loss_model.center, p=2, dim=1)
-        score = cqcc_outputs[:, 0]
-        score_loader.append(score.detach().cpu())
-    scores = torch.cat(score_loader, 0).data.cpu().numpy()
-    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-    eer, threshold = em.compute_eer(scores[labels==0], scores[labels==1])
-    return eer
+        feats, _ = model(cqcc)
+        ip1_loader.append(feats.detach().cpu().numpy())
+        idx_loader.append((labels.detach().cpu().numpy()))
+        tag_loader.append((tags.detach().cpu().numpy()))
+    features = np.concatenate(ip1_loader, 0)
+    labels = np.concatenate(idx_loader, 0)
+    gen_feats = features[labels==0]
+    return features, labels, gen_feats
+
+def predict_with_OCSVM(feat_model_path):
+    from sklearn.svm import OneClassSVM
+    _, _, train_gen_feats = get_features(feat_model_path, "train")
+    clf = OneClassSVM(gamma='auto', nu=0.05).fit(train_gen_feats)
+    dev_features, dev_labels, _ = get_features(feat_model_path, "dev")
+    eval_features, eval_labels, _ = get_features(feat_model_path, "eval")
+    dev_scores = clf.score_samples(dev_features)
+    eval_scores = clf.score_samples(eval_features)
+    dev_eer = em.compute_eer(dev_scores[dev_labels==0], dev_scores[dev_labels==1])
+    eval_eer = em.compute_eer(eval_scores[eval_labels==0], eval_scores[eval_labels==1])
+
+    clf2 = OneClassSVM(gamma='auto', nu=0.5).fit(train_gen_feats)
+    dev_scores = clf2.score_samples(dev_features)
+    eval_scores = clf2.score_samples(eval_features)
+    dev_eer2 = em.compute_eer(dev_scores[dev_labels == 0], dev_scores[dev_labels == 1])
+    eval_eer2 = em.compute_eer(eval_scores[eval_labels == 0], eval_scores[eval_labels == 1])
+
+    clf3 = OneClassSVM(gamma='auto', nu=0.95).fit(train_gen_feats)
+    dev_scores = clf3.score_samples(dev_features)
+    eval_scores = clf3.score_samples(eval_features)
+    dev_eer3 = em.compute_eer(dev_scores[dev_labels == 0], dev_scores[dev_labels == 1])
+    eval_eer3 = em.compute_eer(eval_scores[eval_labels == 0], eval_scores[eval_labels == 1])
+
+    return dev_eer[0], eval_eer[0], dev_eer2[0], eval_eer2[0], dev_eer3[0], eval_eer3[0]
 
 if __name__ == "__main__":
     # args, (a, b, c, d, e, f) = read_args_json("models/cqt_cnn1")
@@ -312,8 +323,13 @@ if __name__ == "__main__":
     #     print(eer)
     #     b.append(eer)
 
-    feat_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_cqcc_model.pt"
-    loss_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_loss_model.pt"
+    # feat_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_cqcc_model.pt"
+    # loss_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_loss_model.pt"
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-    test_checkpoint_model(feat_model_path, loss_model_path, "eval", None)
+    # test_checkpoint_model(feat_model_path, loss_model_path, "eval", None)
     # print(eer)
+
+    feat_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_cqcc_model_%d.pt" % 80
+    loss_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_loss_model_%d.pt" % 80
+    dev_eer, eval_eer, dev_eer2, eval_eer2, dev_eer3, eval_eer3 = predict_with_OCSVM(feat_model_path)
+    print(dev_eer, eval_eer, dev_eer2, eval_eer2, dev_eer3, eval_eer3)

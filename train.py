@@ -35,20 +35,20 @@ def initParams():
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", default='Melspec',
                         choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
-    parser.add_argument("--feat_len", type=int, help="features length", default=650)
+    parser.add_argument("--feat_len", type=int, help="features length", default=750)
     parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='zero', choices=['zero', 'repeat'],
                         help="how to pad short utterance")
-    parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=16)
+    parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
     parser.add_argument('-m', '--model', help='Model arch', default='resnet',
                         choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=100, help="Number of epochs for training")
-    parser.add_argument('--batch_size', type=int, default=4, help="Mini batch size for training")
-    parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
-    parser.add_argument('--lr_decay', type=float, default=0.8, help="decay learning rate")
+    parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
+    parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
+    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
+    parser.add_argument('--lr_decay', type=float, default=0.6, help="decay learning rate")
     parser.add_argument('--interval', type=int, default=10, help="interval to decay lr")
 
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
@@ -61,8 +61,8 @@ def initParams():
     parser.add_argument('--add_loss', type=str, default=None,
                         choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
-    parser.add_argument('--r_real', type=float, default=0.5, help="r_real for isolate loss")
-    parser.add_argument('--r_fake', type=float, default=30, help="r_fake for isolate loss")
+    parser.add_argument('--r_real', type=float, default=25, help="r_real for isolate loss")
+    parser.add_argument('--r_fake', type=float, default=75, help="r_fake for isolate loss")
     parser.add_argument('--alpha', type=float, default=20.0, help="scale factor for angular isolate loss")
     parser.add_argument('--num_centers', type=int, default=3, help="num of centers for multi isolate loss")
 
