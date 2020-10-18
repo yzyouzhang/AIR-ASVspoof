@@ -37,7 +37,7 @@ def initParams():
                         choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
     parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
-    parser.add_argument('--padding', type=str, default='zero', choices=['zero', 'repeat'],
+    parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat'],
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
@@ -403,17 +403,10 @@ def train(args):
                 idx_loader.append((labels))
                 tag_loader.append((tags))
 
-                if args.add_loss in [None, "center", "lgcl"]:
+                if args.add_loss in [None]:
                     devlossDict["base_loss"].append(cqcc_loss.item())
-                    # _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
-                    # total += labels.size(0)
-                    # cqcc_correct += (cqcc_predicted == labels).sum().item()
-                elif args.add_loss == "lgm":
-                    devlossDict["base_loss"].append(cqcc_loss.item())
-                    # outputs, moutputs, likelihood = lgm_loss(feats, labels)
-                    # _, cqcc_predicted = torch.max(outputs.data, 1)
-                    # total += labels.size(0)
-                    # cqcc_correct += (cqcc_predicted == labels).sum().item()
+                elif args.add_loss in ["lgm", "center", "lgcl"]:
+                    devlossDict[args.add_loss].append(cqcc_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
@@ -427,9 +420,6 @@ def train(args):
                 elif args.add_loss == "multicenter_isolate":
                     multiisoloss = multicenter_iso_loss(feats, labels)
                     devlossDict[args.add_loss].append(multiisoloss.item())
-                # if (k+1) % 10 == 0:
-                #     print('Epoch [{}/{}], Step [{}/{}], cqcc_accuracy {:.4f} %'.format(
-                #         epoch_num + 1, args.num_epochs, k + 1, len(valDataLoader), (100 * cqcc_correct / total)))
 
                 score_loader.append(score)
 
@@ -483,17 +473,10 @@ def train(args):
                 idx_loader.append((labels))
                 tag_loader.append((tags))
 
-                if args.add_loss in [None, "center", "lgcl"]:
-                    testlossDict["base_loss"].append(cqcc_loss.item())
-                    # _, cqcc_predicted = torch.max(cqcc_outputs.data, 1)
-                    # total += labels.size(0)
-                    # cqcc_correct += (cqcc_predicted == labels).sum().item()
-                elif args.add_loss == "lgm":
-                    testlossDict["base_loss"].append(cqcc_loss.item())
-                    # outputs, moutputs, likelihood = lgm_loss(feats, labels)
-                    # _, cqcc_predicted = torch.max(outputs.data, 1)
-                    # total += labels.size(0)
-                    # cqcc_correct += (cqcc_predicted == labels).sum().item()
+                if args.add_loss in [None]:
+                    devlossDict["base_loss"].append(cqcc_loss.item())
+                elif args.add_loss in ["lgm", "center", "lgcl"]:
+                    devlossDict[args.add_loss].append(cqcc_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
@@ -507,9 +490,6 @@ def train(args):
                 elif args.add_loss == "multicenter_isolate":
                     multiisoloss = multicenter_iso_loss(feats, labels)
                     testlossDict[args.add_loss].append(multiisoloss.item())
-                # if (k+1) % 10 == 0:
-                #     print('Epoch [{}/{}], Step [{}/{}], cqcc_accuracy {:.4f} %'.format(
-                #         epoch_num + 1, args.num_epochs, k + 1, len(valDataLoader), (100 * cqcc_correct / total)))
 
                 score_loader.append(score)
 
@@ -612,7 +592,7 @@ def train(args):
 def test(args, model, loss_model, part='eval'):
     model.eval()
     test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, part,
-                            args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop)
+                            args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
                                 collate_fn=test_set.collate_fn)
     cqcc_correct = 0

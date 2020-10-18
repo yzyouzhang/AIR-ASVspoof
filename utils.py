@@ -249,6 +249,62 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss, vis=
 
     return eer_cm, min_tDCF
 
+def visualize_dev_and_eval(dev_feat, dev_labels, eval_feat, eval_labels, center, epoch, out_fold):
+    # visualize which experiemnt which epoch
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 8))
+    # plt.ion()
+    # c = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff',
+    #      '#ff00ff', '#990000', '#999900', '#009900', '#009999']
+    c = ['#ff0000', '#003366', '#ffff00']
+    c_tag = ['#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#990000', '#999900',
+             '#009900', '#009999', '#00ff00', '#990000', '#999900', '#ff0000',
+             '#003366', '#ffff00', '#f0000f', '#0f00f0', '#00ffff', '#0000ff', '#ff00ff']
+    # plt.clf()
+    num_centers, enc_dim = center.shape
+    if enc_dim > 2:
+        X = np.concatenate((dev_feat, eval_feat), axis=0)
+        X_tsne = TSNE(random_state=999, perplexity=40, early_exaggeration=100).fit_transform(X)
+        center = X_tsne[:num_centers]
+        feat = X_tsne[num_centers:]
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X)
+        ex_ratio = pca.explained_variance_ratio_
+        center_pca = X_pca[:num_centers]
+        feat_pca = X_pca[num_centers:]
+    else:
+        center_pca = center
+        feat_pca = feat
+        ex_ratio = [0.5, 0.5]
+    # t-SNE visualization
+    ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
+    ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
+    ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
+    plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
+    ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
+    for i in range(1, 20):
+        ax3.plot(feat[tags == i, 0], feat[tags == i, 1], '.', c=c_tag[i-1], markersize=2)
+    ax3.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
+                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
+                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
+    ax1.legend(['genuine', 'spoofing', 'center'])
+    # PCA visualization
+    ax4.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=1)
+    ax4.plot(feat_pca[labels == 1, 0], feat_pca[labels == 1, 1], '.', c=c[1], markersize=1)
+    ax4.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
+    plt.setp((ax5, ax6), xlim=ax4.get_xlim(), ylim=ax4.get_ylim())
+    ax5.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=2)
+    for i in range(1, 20):
+        ax6.plot(feat_pca[tags == i, 0], feat_pca[tags == i, 1], '.', c=c_tag[i - 1], markersize=2)
+    ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
+                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
+                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
+    ax4.legend(['genuine', 'spoofing', 'center'])
+    fig.suptitle("Feature Visualization of Epoch %d, %s, %.5f, %.5f" % (epoch, trainOrDev, ex_ratio[0], ex_ratio[0]))
+    plt.savefig(os.path.join(out_fold, trainOrDev + '_vis_feat_epoch=%d.jpg' % epoch))
+    plt.show()
+    fig.clf()
+    plt.close(fig)
+
 def get_features(feat_model_path, part):
     model = torch.load(feat_model_path)
     dataset = ASVspoof2019("LA", "/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",

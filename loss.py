@@ -307,7 +307,7 @@ class LMCL_loss(nn.Module):
         2018 07/02
         """
 
-    def __init__(self, num_classes, feat_dim, s=7.00, m=0.2):
+    def __init__(self, num_classes, feat_dim, s=20, m=0.85):
         super(LMCL_loss, self).__init__()
         self.feat_dim = feat_dim
         self.num_classes = num_classes
