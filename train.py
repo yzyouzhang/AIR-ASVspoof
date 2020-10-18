@@ -405,7 +405,12 @@ def train(args):
 
                 if args.add_loss in [None]:
                     devlossDict["base_loss"].append(cqcc_loss.item())
-                elif args.add_loss in ["lgm", "center", "lgcl"]:
+                elif args.add_loss in ["lgm", "center"]:
+                    devlossDict[args.add_loss].append(cqcc_loss.item())
+                elif args.add_loss == "lgcl":
+                    outputs, moutputs = lgcl_loss(feats, labels)
+                    cqcc_loss = criterion(moutputs, labels)
+                    score = moutputs[:, 0]
                     devlossDict[args.add_loss].append(cqcc_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
@@ -475,7 +480,12 @@ def train(args):
 
                 if args.add_loss in [None]:
                     devlossDict["base_loss"].append(cqcc_loss.item())
-                elif args.add_loss in ["lgm", "center", "lgcl"]:
+                elif args.add_loss in ["lgm", "center"]:
+                    devlossDict[args.add_loss].append(cqcc_loss.item())
+                elif args.add_loss == "lgcl":
+                    outputs, moutputs = lgcl_loss(feats, labels)
+                    cqcc_loss = criterion(moutputs, labels)
+                    score = moutputs[:, 0]
                     devlossDict[args.add_loss].append(cqcc_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
@@ -658,6 +668,9 @@ def test(args, model, loss_model, part='eval'):
                         dist = torch.norm(feats[j] - loss_model.centers[k].unsqueeze(0), p=2, dim=1)
                         if dist.item() < score:
                             score = dist.item()
+                elif args.add_loss == "lgcl":
+                    outputs, moutputs = loss_model(feats, labels)
+                    score = moutputs[:, 0]
                 else:
                     score = cqcc_outputs.data[j][0].cpu().numpy()
                 cm_score_file.write(
