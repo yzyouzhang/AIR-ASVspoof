@@ -21,7 +21,7 @@ torch.set_default_tensor_type(torch.FloatTensor)
 def initParams():
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument('--seed', type=int, help="random number seed", default=999)
+    parser.add_argument('--seed', type=int, help="random number seed", default=688)
 
     # Data folder prepare
     parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
@@ -410,7 +410,7 @@ def train(args):
                 elif args.add_loss == "lgcl":
                     outputs, moutputs = lgcl_loss(feats, labels)
                     cqcc_loss = criterion(moutputs, labels)
-                    score = moutputs[:, 0]
+                    score = F.softmax(outputs, dim=1)[:, 0]
                     devlossDict[args.add_loss].append(cqcc_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
@@ -479,14 +479,14 @@ def train(args):
                 tag_loader.append((tags))
 
                 if args.add_loss in [None]:
-                    devlossDict["base_loss"].append(cqcc_loss.item())
+                    testlossDict["base_loss"].append(cqcc_loss.item())
                 elif args.add_loss in ["lgm", "center"]:
-                    devlossDict[args.add_loss].append(cqcc_loss.item())
+                    testlossDict[args.add_loss].append(cqcc_loss.item())
                 elif args.add_loss == "lgcl":
                     outputs, moutputs = lgcl_loss(feats, labels)
                     cqcc_loss = criterion(moutputs, labels)
-                    score = moutputs[:, 0]
-                    devlossDict[args.add_loss].append(cqcc_loss.item())
+                    score = F.softmax(outputs, dim=1)[:, 0]
+                    testlossDict[args.add_loss].append(cqcc_loss.item())
                 elif args.add_loss in ["isolate", "iso_sq"]:
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
@@ -609,18 +609,6 @@ def test(args, model, loss_model, part='eval'):
     total = 0
     ip1_loader, tag_loader, idx_loader = [], [], []
     with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:
-    #     for i in trange(len(test_set)):
-    #         score_lst = []
-    #         for j in range(5):
-    #             feat, audio_fn, tags, labels = test_set[i]
-    #             feat = feat.unsqueeze(0).unsqueeze(0).float().to(args.device)
-    #             feats, _ = model(feat)
-    #             # print(torch.norm(feats - loss_model.center, p=2, dim=1).item())
-    #             score_lst.append(torch.norm(feats - loss_model.center, p=2, dim=1).item())
-    #         score = np.mean(score_lst)
-    #         cm_score_file.write('%s A%02d %s %s\n' % (audio_fn, tags,
-    #                                               "spoof" if labels else "bonafide",
-    #                                               score))
 
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
             cqcc = cqcc.unsqueeze(1).float().to(args.device)
@@ -670,7 +658,7 @@ def test(args, model, loss_model, part='eval'):
                             score = dist.item()
                 elif args.add_loss == "lgcl":
                     outputs, moutputs = loss_model(feats, labels)
-                    score = moutputs[:, 0]
+                    score = F.softmax(outputs, dim=1)[:, 0]
                 else:
                     score = cqcc_outputs.data[j][0].cpu().numpy()
                 cm_score_file.write(
@@ -678,22 +666,6 @@ def test(args, model, loss_model, part='eval'):
                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",
                                           score))
     eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(args.out_fold, 'cm_score.txt'), args.path_to_database)
-
-    # feat = torch.cat(ip1_loader, 0)
-    # labels = torch.cat(idx_loader, 0)
-    # tags = torch.cat(tag_loader, 0)
-    # if args.add_loss == "isolate":
-    #     centers = loss_model.center
-    # elif args.add_loss == "multi_isolate":
-    #     centers = loss_model.centers
-    # elif args.add_loss == "ang_iso":
-    #     centers = loss_model.center
-    # else:
-    #     centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
-    # torch.save(feat, os.path.join(args.out_fold, 'feat_19.pt'))
-    # torch.save(tags, os.path.join(args.out_fold, 'tags_19.pt'))
-    # visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
-    #           19, part)
 
     return eer_cm, min_tDCF
 

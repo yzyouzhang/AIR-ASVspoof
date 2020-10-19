@@ -56,6 +56,7 @@ def compare_exps(exp_dirs, root_dir='/home/neil/AIR-ASVspoof/experiments'):
             ax4.minorticks_on()
             ax4.grid(b=True, which='major', linestyle='-')
             ax4.grid(b=True, which='minor', linestyle=':')
+            ax4.set_ylim([0, 0.1])
             ax4.legend(exp_dirs)
     plt.show()
 
@@ -73,9 +74,9 @@ def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
     num_centers, enc_dim = center.shape
     if enc_dim > 2:
         X = np.concatenate((center, feat), axis=0)
-        X_tsne = TSNE(random_state=999, perplexity=40, early_exaggeration=100).fit_transform(X)
-        center = X_tsne[:num_centers]
-        feat = X_tsne[num_centers:]
+        # X_tsne = TSNE(random_state=999, perplexity=40, early_exaggeration=100).fit_transform(X)
+        # center = X_tsne[:num_centers]
+        # feat = X_tsne[num_centers:]
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X)
         ex_ratio = pca.explained_variance_ratio_
@@ -86,28 +87,28 @@ def visualize(feat, tags, labels, center, epoch, trainOrDev, out_fold):
         feat_pca = feat
         ex_ratio = [0.5, 0.5]
     # t-SNE visualization
-    ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
-    ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
-    ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
-    plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
-    ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
-    for i in range(1, 20):
-        ax3.plot(feat[tags == i, 0], feat[tags == i, 1], '.', c=c_tag[i-1], markersize=2)
-    ax3.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
-                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
-                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
-    ax1.legend(['genuine', 'spoofing', 'center'])
+    # ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
+    # ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
+    # ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
+    # plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
+    # ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
+    # for i in range(1, 20):
+    #     ax3.plot(feat[tags == i, 0], feat[tags == i, 1], '.', c=c_tag[i-1], markersize=2)
+    # ax3.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
+    #             'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
+    #             'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
+    # ax1.legend(['genuine', 'spoofing', 'center'])
     # PCA visualization
     ax4.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=1)
     ax4.plot(feat_pca[labels == 1, 0], feat_pca[labels == 1, 1], '.', c=c[1], markersize=1)
     ax4.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
     plt.setp((ax5, ax6), xlim=ax4.get_xlim(), ylim=ax4.get_ylim())
     ax5.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=2)
-    for i in range(1, 20):
-        ax6.plot(feat_pca[tags == i, 0], feat_pca[tags == i, 1], '.', c=c_tag[i - 1], markersize=2)
-    ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
-                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
-                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
+    # for i in range(1, 20):
+    #     ax6.plot(feat_pca[tags == i, 0], feat_pca[tags == i, 1], '.', c=c_tag[i - 1], markersize=2)
+    # ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
+    #             'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
+    #             'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
     ax4.legend(['genuine', 'spoofing', 'center'])
     fig.suptitle("Feature Visualization of Epoch %d, %s, %.5f, %.5f" % (epoch, trainOrDev, ex_ratio[0], ex_ratio[0]))
     plt.savefig(os.path.join(out_fold, trainOrDev + '_vis_feat_epoch=%d.jpg' % epoch))
@@ -220,6 +221,9 @@ def test_checkpoint_model(feat_model_path, loss_model_path, part, add_loss, vis=
                 score = torch.norm(feats - loss_model.center, p=2, dim=1)
             elif add_loss == "ang_iso":
                 ang_isoloss, score = loss_model(feats, labels)
+            elif add_loss == "lgcl":
+                outputs, moutputs = loss_model(feats, labels)
+                score = F.softmax(outputs, dim=1)[:, 0]
 
             for j in range(labels.size(0)):
                 cm_score_file.write(
@@ -261,44 +265,52 @@ def visualize_dev_and_eval(dev_feat, dev_labels, eval_feat, eval_labels, center,
              '#003366', '#ffff00', '#f0000f', '#0f00f0', '#00ffff', '#0000ff', '#ff00ff']
     # plt.clf()
     num_centers, enc_dim = center.shape
+    ind_dev = torch.randperm(dev_feat.shape[0])[:5000].numpy()
+    ind_eval = torch.randperm(eval_feat.shape[0])[:5000].numpy()
+
+    dev_feat_sample = dev_feat[ind_dev]
+    eval_feat_sample = eval_feat[ind_eval]
+    dev_lab_sam = dev_labels[ind_dev]
+    eval_lab_sam = eval_labels[ind_eval]
     if enc_dim > 2:
-        X = np.concatenate((dev_feat, eval_feat), axis=0)
+        X = np.concatenate((center, dev_feat_sample, eval_feat_sample), axis=0)
         X_tsne = TSNE(random_state=999, perplexity=40, early_exaggeration=100).fit_transform(X)
         center = X_tsne[:num_centers]
-        feat = X_tsne[num_centers:]
+        feat_dev = X_tsne[num_centers:num_centers+5000]
+        feat_eval = X_tsne[num_centers + 5000:]
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X)
         ex_ratio = pca.explained_variance_ratio_
         center_pca = X_pca[:num_centers]
-        feat_pca = X_pca[num_centers:]
-    else:
-        center_pca = center
-        feat_pca = feat
-        ex_ratio = [0.5, 0.5]
+        feat_pca_dev = X_pca[num_centers:num_centers+5000]
+        feat_pca_eval = X_tsne[num_centers + 5000:]
+    # else:
+    #     center_pca = center
+    #     feat_pca = feat
+    #     ex_ratio = [0.5, 0.5]
     # t-SNE visualization
-    ax1.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=1)
-    ax1.plot(feat[labels == 1, 0], feat[labels == 1, 1], '.', c=c[1], markersize=1)
+    ax1.plot(feat_dev[dev_lab_sam == 0, 0], feat_dev[dev_lab_sam == 0, 1], '.', c=c[0], markersize=1)
+    ax1.plot(feat_dev[dev_lab_sam == 1, 0], feat_dev[dev_lab_sam == 1, 1], '.', c=c[1], markersize=1)
+    ax2.plot(feat_eval[eval_lab_sam == 0, 0], feat_eval[eval_lab_sam == 0, 1], '.', c=c[0], markersize=1)
+    ax2.plot(feat_eval[eval_lab_sam == 1, 0], feat_eval[eval_lab_sam == 1, 1], '.', c=c[1], markersize=1)
     ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
-    plt.setp((ax2, ax3), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
+    ax2.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
+    plt.setp((ax2), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
     ax2.plot(feat[labels == 0, 0], feat[labels == 0, 1], '.', c=c[0], markersize=2)
-    for i in range(1, 20):
-        ax3.plot(feat[tags == i, 0], feat[tags == i, 1], '.', c=c_tag[i-1], markersize=2)
-    ax3.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
-                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
-                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
+
     ax1.legend(['genuine', 'spoofing', 'center'])
     # PCA visualization
-    ax4.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=1)
-    ax4.plot(feat_pca[labels == 1, 0], feat_pca[labels == 1, 1], '.', c=c[1], markersize=1)
-    ax4.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
-    plt.setp((ax5, ax6), xlim=ax4.get_xlim(), ylim=ax4.get_ylim())
-    ax5.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=2)
-    for i in range(1, 20):
-        ax6.plot(feat_pca[tags == i, 0], feat_pca[tags == i, 1], '.', c=c_tag[i - 1], markersize=2)
-    ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
-                'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
-                'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
-    ax4.legend(['genuine', 'spoofing', 'center'])
+    # ax4.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=1)
+    # ax4.plot(feat_pca[labels == 1, 0], feat_pca[labels == 1, 1], '.', c=c[1], markersize=1)
+    # ax4.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
+    # plt.setp((ax5, ax6), xlim=ax4.get_xlim(), ylim=ax4.get_ylim())
+    # ax5.plot(feat_pca[labels == 0, 0], feat_pca[labels == 0, 1], '.', c=c[0], markersize=2)
+    # for i in range(1, 20):
+    #     ax6.plot(feat_pca[tags == i, 0], feat_pca[tags == i, 1], '.', c=c_tag[i - 1], markersize=2)
+    # ax6.legend(['A01', 'A02', 'A03', 'A04', 'A05', 'A06',
+    #             'A07', 'A08', 'A09', 'A10', 'A11', 'A12',
+    #             'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19'])
+    # ax4.legend(['genuine', 'spoofing', 'center'])
     fig.suptitle("Feature Visualization of Epoch %d, %s, %.5f, %.5f" % (epoch, trainOrDev, ex_ratio[0], ex_ratio[0]))
     plt.savefig(os.path.join(out_fold, trainOrDev + '_vis_feat_epoch=%d.jpg' % epoch))
     plt.show()
@@ -310,7 +322,7 @@ def get_features(feat_model_path, part):
     dataset = ASVspoof2019("LA", "/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
                             "LFCC", feat_len=750, pad_chop=False, padding="repeat")
-    dataLoader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=0,
+    dataLoader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=0,
                                 collate_fn=dataset.collate_fn)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
@@ -331,7 +343,7 @@ def get_features(feat_model_path, part):
 def predict_with_OCSVM(feat_model_path):
     from sklearn.svm import OneClassSVM
     _, _, train_gen_feats = get_features(feat_model_path, "train")
-    clf = OneClassSVM(gamma='auto', nu=0.05).fit(train_gen_feats)
+    clf = OneClassSVM(gamma='auto', degree=256, nu=0.05).fit(train_gen_feats)
     dev_features, dev_labels, _ = get_features(feat_model_path, "dev")
     eval_features, eval_labels, _ = get_features(feat_model_path, "eval")
     dev_scores = clf.score_samples(dev_features)
@@ -339,13 +351,13 @@ def predict_with_OCSVM(feat_model_path):
     dev_eer = em.compute_eer(dev_scores[dev_labels==0], dev_scores[dev_labels==1])
     eval_eer = em.compute_eer(eval_scores[eval_labels==0], eval_scores[eval_labels==1])
 
-    clf2 = OneClassSVM(gamma='auto', nu=0.5).fit(train_gen_feats)
+    clf2 = OneClassSVM(gamma='auto', degree=256, nu=0.5).fit(train_gen_feats)
     dev_scores = clf2.score_samples(dev_features)
     eval_scores = clf2.score_samples(eval_features)
     dev_eer2 = em.compute_eer(dev_scores[dev_labels == 0], dev_scores[dev_labels == 1])
     eval_eer2 = em.compute_eer(eval_scores[eval_labels == 0], eval_scores[eval_labels == 1])
 
-    clf3 = OneClassSVM(gamma='auto', nu=0.95).fit(train_gen_feats)
+    clf3 = OneClassSVM(gamma='auto', degree=256, nu=0.95).fit(train_gen_feats)
     dev_scores = clf3.score_samples(dev_features)
     eval_scores = clf3.score_samples(eval_features)
     dev_eer3 = em.compute_eer(dev_scores[dev_labels == 0], dev_scores[dev_labels == 1])
@@ -385,7 +397,7 @@ if __name__ == "__main__":
     # test_checkpoint_model(feat_model_path, loss_model_path, "eval", None)
     # print(eer)
 
-    feat_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_cqcc_model_%d.pt" % 80
-    loss_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_loss_model_%d.pt" % 80
+    feat_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_cqcc_model_%d.pt" % 36
+    loss_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_loss_model_%d.pt" % 36
     dev_eer, eval_eer, dev_eer2, eval_eer2, dev_eer3, eval_eer3 = predict_with_OCSVM(feat_model_path)
     print(dev_eer, eval_eer, dev_eer2, eval_eer2, dev_eer3, eval_eer3)

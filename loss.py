@@ -80,7 +80,7 @@ class CenterlossFunction(Function):
         return grad_feature * grad_output, None, grad_centers
 
 class AngularIsoLoss(nn.Module):
-    def __init__(self, feat_dim=2, r_real=0.9, r_fake=0.5, alpha=10.0):
+    def __init__(self, feat_dim=2, r_real=0.9, r_fake=0.5, alpha=20.0):
         super(AngularIsoLoss, self).__init__()
         self.feat_dim = feat_dim
         self.r_real = r_real

@@ -90,7 +90,7 @@ class CQCC_ConvNet(nn.Module):
 
         self.layer5 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=(num_nodes, 3), padding=(0, 1), dilation=(1, 1), stride=(1, 1), bias=False),
-            # nn.BatchNorm2d(64),
+            nn.BatchNorm2d(128),
             nn.LeakyReLU(0.1),
             # nn.MaxPool2d(kernel_size=2, stride=2)
         )
