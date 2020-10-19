@@ -99,7 +99,7 @@ class AngularIsoLoss(nn.Module):
         w = F.normalize(self.center, p=2, dim=1)
         x = F.normalize(x, p=2, dim=1)
 
-        scores = x @ w.T
+        scores = x @ w.transpose(0,1)
         output_scores = scores.clone()
 
         scores[labels == 0] = self.r_real - scores[labels == 0]
@@ -307,7 +307,7 @@ class LMCL_loss(nn.Module):
         2018 07/02
         """
 
-    def __init__(self, num_classes, feat_dim, s=20, m=0.85):
+    def __init__(self, num_classes, feat_dim, s=20, m=0.9):
         super(LMCL_loss, self).__init__()
         self.feat_dim = feat_dim
         self.num_classes = num_classes
