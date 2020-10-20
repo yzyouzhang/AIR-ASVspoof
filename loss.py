@@ -299,13 +299,6 @@ class LGMLoss_v0(nn.Module):
         return logits, margin_logits, likelihood
 
 class LMCL_loss(nn.Module):
-    """
-        Refer to paper:
-        Hao Wang, Yitong Wang, Zheng Zhou, Xing Ji, Dihong Gong, Jingchao Zhou,Zhifeng Li, and Wei Liu
-        CosFace: Large Margin Cosine Loss for Deep Face Recognition. CVPR2018
-        re-implement by yirong mao
-        2018 07/02
-        """
 
     def __init__(self, num_classes, feat_dim, s=20, m=0.9):
         super(LMCL_loss, self).__init__()

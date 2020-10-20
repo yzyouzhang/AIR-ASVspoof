@@ -287,10 +287,13 @@ def visualize_dev_and_eval(dev_feat, dev_labels, eval_feat, eval_labels, center,
         center_pca = X_pca[:num_centers]
         feat_pca_dev = X_pca[num_centers:num_centers+5000]
         feat_pca_eval = X_pca[num_centers + 5000:]
-    # else:
-    #     center_pca = center
-    #     feat_pca = feat
-    #     ex_ratio = [0.5, 0.5]
+    else:
+        center_pca = center
+        feat_dev = dev_feat_sample
+        feat_eval = eval_feat_sample
+        feat_pca_dev = feat_dev
+        feat_pca_eval = feat_eval
+        ex_ratio = [0.5, 0.5]
     # t-SNE visualization
     ax1.plot(feat_dev[dev_lab_sam == 0, 0], feat_dev[dev_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax1.plot(feat_dev[dev_lab_sam == 1, 0], feat_dev[dev_lab_sam == 1, 1], '.', c=c[1], markersize=1)
@@ -301,7 +304,7 @@ def visualize_dev_and_eval(dev_feat, dev_labels, eval_feat, eval_labels, center,
     ax2.plot(feat_eval[eval_lab_sam == 0, 0], feat_eval[eval_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax2.plot(feat_eval[eval_lab_sam == 1, 0], feat_eval[eval_lab_sam == 1, 1], '.', c=c[1], markersize=1)
 
-    ax1.legend(['genuine', 'spoofing', 'center'])
+    # ax1.legend(['genuine', 'spoofing', 'center'])
     # PCA visualization
     ax3.plot(feat_pca_dev[dev_lab_sam == 0, 0], feat_pca_dev[dev_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax3.plot(feat_pca_dev[dev_lab_sam == 1, 0], feat_pca_dev[dev_lab_sam == 1, 1], '.', c=c[1], markersize=1)
@@ -310,7 +313,7 @@ def visualize_dev_and_eval(dev_feat, dev_labels, eval_feat, eval_labels, center,
     ax4.plot(feat_pca_eval[eval_lab_sam == 0, 0], feat_pca_eval[eval_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax4.plot(feat_pca_eval[eval_lab_sam == 1, 0], feat_pca_eval[eval_lab_sam == 1, 1], '.', c=c[1], markersize=1)
 
-    ax4.legend(['genuine', 'spoofing', 'center'])
+    # ax4.legend(['genuine', 'spoofing', 'center'])
     fig.suptitle("Generalization Visualization of Epoch %d, %.5f, %.5f" % (epoch, ex_ratio[0], ex_ratio[1]))
     plt.savefig(os.path.join(out_fold, '_vis_feat_epoch=%d.jpg' % epoch))
     plt.show()
