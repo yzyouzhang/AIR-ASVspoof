@@ -41,6 +41,7 @@ def compare_exps(exp_dirs, root_dir='/home/neil/AIR-ASVspoof/experiments'):
             x = np.array([[float(i) for i in line[0:-1].split('\t')] for line in dev_log.readlines()[1:]])
             ax2.plot(range(1, len(x) + 1), x[:, 1])
             ax2.set_title("Validation Loss")
+            ax2.set_ylim([0, 0.2])
             ax2.legend(exp_dirs)
 
             ax3.plot(range(1, len(x) + 1), x[:, 2])
@@ -297,22 +298,23 @@ def visualize_dev_and_eval(dev_feat, dev_labels, eval_feat, eval_labels, center,
     # t-SNE visualization
     ax1.plot(feat_dev[dev_lab_sam == 0, 0], feat_dev[dev_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax1.plot(feat_dev[dev_lab_sam == 1, 0], feat_dev[dev_lab_sam == 1, 1], '.', c=c[1], markersize=1)
-
-    ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
-    ax2.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
+    ax1.axis('off')
+    # ax1.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
+    # ax2.plot(center[:, 0], center[:, 1], 'x', c=c[2], markersize=5)
     plt.setp((ax2), xlim=ax1.get_xlim(), ylim=ax1.get_ylim())
     ax2.plot(feat_eval[eval_lab_sam == 0, 0], feat_eval[eval_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax2.plot(feat_eval[eval_lab_sam == 1, 0], feat_eval[eval_lab_sam == 1, 1], '.', c=c[1], markersize=1)
-
+    ax2.axis('off')
     # ax1.legend(['genuine', 'spoofing', 'center'])
     # PCA visualization
     ax3.plot(feat_pca_dev[dev_lab_sam == 0, 0], feat_pca_dev[dev_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax3.plot(feat_pca_dev[dev_lab_sam == 1, 0], feat_pca_dev[dev_lab_sam == 1, 1], '.', c=c[1], markersize=1)
-    ax3.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
+    # ax3.plot(center_pca[:, 0], center_pca[:, 1], 'x', c=c[2], markersize=5)
+    ax3.axis('off')
     plt.setp((ax4), xlim=ax3.get_xlim(), ylim=ax3.get_ylim())
     ax4.plot(feat_pca_eval[eval_lab_sam == 0, 0], feat_pca_eval[eval_lab_sam == 0, 1], '.', c=c[0], markersize=1)
     ax4.plot(feat_pca_eval[eval_lab_sam == 1, 0], feat_pca_eval[eval_lab_sam == 1, 1], '.', c=c[1], markersize=1)
-
+    ax4.axis('off')
     # ax4.legend(['genuine', 'spoofing', 'center'])
     fig.suptitle("Generalization Visualization of Epoch %d, %.5f, %.5f" % (epoch, ex_ratio[0], ex_ratio[1]))
     plt.savefig(os.path.join(out_fold, '_vis_feat_epoch=%d.jpg' % epoch))
@@ -396,11 +398,11 @@ if __name__ == "__main__":
 
     # feat_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_cqcc_model.pt"
     # loss_model_path = "/data/neil/antiRes/models1007/ce/anti-spoofing_loss_model.pt"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     # test_checkpoint_model(feat_model_path, loss_model_path, "eval", None)
     # print(eer)
 
-    feat_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_cqcc_model_%d.pt" % 36
-    loss_model_path = "/data/neil/antiRes/models1015/ce/checkpoint/anti-spoofing_loss_model_%d.pt" % 36
+    feat_model_path = "/data/neil/antiRes/models1020/softmax/checkpoint/anti-spoofing_cqcc_model_%d.pt" % 78
+    loss_model_path = "/data/neil/antiRes/models1020/softmax/checkpoint/anti-spoofing_loss_model_%d.pt" % 78
     dev_eer, eval_eer, dev_eer2, eval_eer2, dev_eer3, eval_eer3 = predict_with_OCSVM(feat_model_path)
     print(dev_eer, eval_eer, dev_eer2, eval_eer2, dev_eer3, eval_eer3)
