@@ -1,15 +1,7 @@
-import torch
-import torch.nn as nn
 import argparse
-import os
 import json
 import shutil
-import numpy as np
-import model as model_
 from resnet import ResNet
-from dataset import ASVspoof2019
-from torch.utils.data import DataLoader
-from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from loss import *
 from collections import defaultdict
 from tqdm import tqdm, trange
@@ -39,9 +31,6 @@ def initParams():
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
-    parser.add_argument('-m', '--model', help='Model arch', default='resnet',
-                        choices=['cnn', 'resnet', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
-
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
@@ -56,12 +45,11 @@ def initParams():
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
     parser.add_argument('--add_loss', type=str, default=None,
-                        choices=[None, 'lgcl', 'ang_iso'], help="add other loss for one-class training")
+                        choices=[None, 'amsoftmax', 'ocsoftmax'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
     parser.add_argument('--alpha', type=float, default=20, help="scale factor for angular isolate loss")
-
 
     args = parser.parse_args()
 
@@ -147,18 +135,18 @@ def train(args):
 
     criterion = nn.CrossEntropyLoss()
 
-    if args.add_loss == "lgcl":
-        lgcl_loss = LMCL_loss(2, args.enc_dim, s=args.alpha, m=args.r_real).to(args.device)
-        lgcl_loss.train()
-        lgcl_optimzer = torch.optim.SGD(lgcl_loss.parameters(), lr=0.01)
+    if args.add_loss == "amsoftmax":
+        amsoftmax_loss = AMSoftmax(2, args.enc_dim, s=args.alpha, m=args.r_real).to(args.device)
+        amsoftmax_loss.train()
+        amsoftmax_optimzer = torch.optim.SGD(amsoftmax_loss.parameters(), lr=0.01)
 
-    if args.add_loss == "ang_iso":
-        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
-        ang_iso.train()
-        ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
+    if args.add_loss == "ocsoftmax":
+        ocsoftmax = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
+        ocsoftmax.train()
+        ocsoftmax_optimzer = torch.optim.SGD(ocsoftmax.parameters(), lr=args.lr)
 
     early_stop_cnt = 0
-    prev_loss = 1e8
+    prev_eer = 1e8
     if args.add_loss is None:
         monitor_loss = 'base_loss'
     else:
@@ -172,22 +160,15 @@ def train(args):
         adjust_learning_rate(args, lfcc_optimizer, epoch_num)
         if args.add_loss == "isolate":
             adjust_learning_rate(args, iso_optimzer, epoch_num)
-        if args.add_loss == "ang_iso":
-            adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
+        if args.add_loss == "ocsoftmax":
+            adjust_learning_rate(args, ocsoftmax_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
-        # with trange(2) as t:
-        # with trange(len(trainDataLoader)) as t:
-        #     for i in t:
         for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
-            # lfcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             lfcc = lfcc.unsqueeze(1).float().to(args.device)
             tags = tags.to(args.device)
             labels = labels.to(args.device)
-
             feats, lfcc_outputs = lfcc_model(lfcc)
-
             lfcc_loss = criterion(lfcc_outputs, labels)
-
             trainlossDict["base_loss"].append(lfcc_loss.item())
 
             if args.add_loss == None:
@@ -195,26 +176,25 @@ def train(args):
                 lfcc_loss.backward()
                 lfcc_optimizer.step()
 
-            if args.add_loss == "ang_iso":
-                ang_isoloss, _ = ang_iso(feats, labels)
-                lfcc_loss = ang_isoloss * args.weight_loss
+            if args.add_loss == "ocsoftmax":
+                ocsoftmaxloss, _ = ocsoftmax(feats, labels)
+                lfcc_loss = ocsoftmaxloss * args.weight_loss
                 lfcc_optimizer.zero_grad()
-                ang_iso_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(ang_isoloss.item())
+                ocsoftmax_optimzer.zero_grad()
+                trainlossDict[args.add_loss].append(ocsoftmaxloss.item())
                 lfcc_loss.backward()
                 lfcc_optimizer.step()
-                ang_iso_optimzer.step()
+                ocsoftmax_optimzer.step()
 
-            if args.add_loss == "lgcl":
-                outputs, moutputs = lgcl_loss(feats, labels)
+            if args.add_loss == "amsoftmax":
+                outputs, moutputs = amsoftmax_loss(feats, labels)
                 lfcc_loss = criterion(moutputs, labels)
-                # print(criterion(moutputs, labels).data)
                 trainlossDict[args.add_loss].append(lfcc_loss.item())
                 lfcc_optimizer.zero_grad()
-                lgcl_optimzer.zero_grad()
+                amsoftmax_optimzer.zero_grad()
                 lfcc_loss.backward()
                 lfcc_optimizer.step()
-                lgcl_optimzer.step()
+                amsoftmax_optimzer.step()
 
             ip1_loader.append(feats)
             idx_loader.append((labels))
@@ -225,15 +205,10 @@ def train(args):
                           str(np.nanmean(trainlossDict[monitor_loss])) + "\n")
 
         # Val the model
-        # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
         lfcc_model.eval()
         with torch.no_grad():
             ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-            # with trange(2) as v:
-            # with trange(len(valDataLoader)) as v:
-            #     for i in v:
             for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
-                # lfcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 lfcc = lfcc.unsqueeze(1).float().to(args.device)
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
@@ -249,8 +224,8 @@ def train(args):
 
                 if args.add_loss == None:
                     devlossDict["base_loss"].append(lfcc_loss.item())
-                elif args.add_loss == "lgcl":
-                    outputs, moutputs = lgcl_loss(feats, labels)
+                elif args.add_loss == "amsoftmax":
+                    outputs, moutputs = amsoftmax_loss(feats, labels)
                     lfcc_loss = criterion(moutputs, labels)
                     score = F.softmax(outputs, dim=1)[:, 0]
                     devlossDict[args.add_loss].append(lfcc_loss.item())
@@ -258,17 +233,12 @@ def train(args):
                     isoloss = iso_loss(feats, labels)
                     score = torch.norm(feats - iso_loss.center, p=2, dim=1)
                     devlossDict[args.add_loss].append(isoloss.item())
-                elif args.add_loss == "ang_iso":
-                    ang_isoloss, score = ang_iso(feats, labels)
-                    devlossDict[args.add_loss].append(ang_isoloss.item())
+                elif args.add_loss == "ocsoftmax":
+                    ocsoftmaxloss, score = ocsoftmax(feats, labels)
+                    devlossDict[args.add_loss].append(ocsoftmaxloss.item())
 
                 score_loader.append(score)
 
-                # desc_str = ''
-                # for key in sorted(devlossDict.keys()):
-                #     desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
-                # # v.set_description(desc_str)
-                # print(desc_str)
             scores = torch.cat(score_loader, 0).data.cpu().numpy()
             labels = torch.cat(idx_loader, 0).data.cpu().numpy()
             val_eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
@@ -279,61 +249,45 @@ def train(args):
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[monitor_loss])) + "\t" + str(val_eer) +"\n")
             print("Val EER: {}".format(val_eer))
 
-        with torch.no_grad():
-            ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-            for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
-                lfcc = lfcc.unsqueeze(1).float().to(args.device)
-                tags = tags.to(args.device)
-                labels = labels.to(args.device)
-
-                feats, lfcc_outputs = lfcc_model(lfcc)
-
-                lfcc_loss = criterion(lfcc_outputs, labels)
-                score = F.softmax(lfcc_outputs, dim=1)[:, 0]
-
-                ip1_loader.append(feats)
-                idx_loader.append((labels))
-                tag_loader.append((tags))
-
-                if args.add_loss in [None]:
-                    testlossDict["base_loss"].append(lfcc_loss.item())
-                elif args.add_loss in ["lgm", "center"]:
-                    testlossDict[args.add_loss].append(lfcc_loss.item())
-                elif args.add_loss == "lgcl":
-                    outputs, moutputs = lgcl_loss(feats, labels)
-                    lfcc_loss = criterion(moutputs, labels)
-                    score = F.softmax(outputs, dim=1)[:, 0]
-                    testlossDict[args.add_loss].append(lfcc_loss.item())
-                elif args.add_loss in ["isolate", "iso_sq"]:
-                    isoloss = iso_loss(feats, labels)
-                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
-                    testlossDict[args.add_loss].append(isoloss.item())
-                elif args.add_loss == "ang_iso":
-                    ang_isoloss, score = ang_iso(feats, labels)
-                    testlossDict[args.add_loss].append(ang_isoloss.item())
-                elif args.add_loss == "multi_isolate":
-                    multi_isoloss = multi_iso_loss(feats, labels)
-                    testlossDict[args.add_loss].append(multi_isoloss.item())
-                elif args.add_loss == "multicenter_isolate":
-                    multiisoloss = multicenter_iso_loss(feats, labels)
-                    testlossDict[args.add_loss].append(multiisoloss.item())
-
-                score_loader.append(score)
-
-                # desc_str = ''
-                # for key in sorted(testlossDict.keys()):
-                #     desc_str += key + ':%.5f' % (np.nanmean(testlossDict[key])) + ', '
-                # # v.set_description(desc_str)
-                # print(desc_str)
-            scores = torch.cat(score_loader, 0).data.cpu().numpy()
-            labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-            other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-            eer = min(eer, other_eer)
-
-            with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
-                log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
-            print("Test EER: {}".format(eer))
+        # # Test the model
+        # with torch.no_grad():
+        #     ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+        #     for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+        #         lfcc = lfcc.unsqueeze(1).float().to(args.device)
+        #         tags = tags.to(args.device)
+        #         labels = labels.to(args.device)
+        #
+        #         feats, lfcc_outputs = lfcc_model(lfcc)
+        #
+        #         lfcc_loss = criterion(lfcc_outputs, labels)
+        #         score = F.softmax(lfcc_outputs, dim=1)[:, 0]
+        #
+        #         ip1_loader.append(feats)
+        #         idx_loader.append((labels))
+        #         tag_loader.append((tags))
+        #
+        #         if args.add_loss in == None:
+        #             testlossDict["base_loss"].append(lfcc_loss.item())
+        #         elif args.add_loss == "amsoftmax":
+        #             outputs, moutputs = amsoftmax_loss(feats, labels)
+        #             lfcc_loss = criterion(moutputs, labels)
+        #             score = F.softmax(outputs, dim=1)[:, 0]
+        #             testlossDict[args.add_loss].append(lfcc_loss.item())
+        #         elif args.add_loss == "ocsoftmax":
+        #             ocsoftmaxloss, score = ocsoftmax(feats, labels)
+        #             testlossDict[args.add_loss].append(ocsoftmaxloss.item())
+        #
+        #         score_loader.append(score)
+        #
+        #     scores = torch.cat(score_loader, 0).data.cpu().numpy()
+        #     labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+        #     eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+        #     other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+        #     eer = min(eer, other_eer)
+        #
+        #     with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
+        #         log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
+        #     print("Test EER: {}".format(eer))
 
 
         valLoss = np.nanmean(devlossDict[monitor_loss])
@@ -342,20 +296,12 @@ def train(args):
         if (epoch_num + 1) % 2 == 0:
             torch.save(lfcc_model, os.path.join(args.out_fold, 'checkpoint',
                                                 'anti-spoofing_lfcc_model_%d.pt' % (epoch_num + 1)))
-            if args.add_loss == "center":
-                loss_model = centerLoss
+            if args.add_loss == "ocsoftmax":
+                loss_model = ocsoftmax
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss in ["isolate", "iso_sq"]:
-                loss_model = iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "ang_iso":
-                loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
+            elif args.add_loss == "amsoftmax":
+                loss_model = amsoftmax_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             else:
@@ -364,18 +310,15 @@ def train(args):
         if val_eer < prev_eer:
             # Save the model checkpoint
             torch.save(lfcc_model, os.path.join(args.out_fold, 'anti-spoofing_lfcc_model.pt'))
-            if args.add_loss in ["isolate", "iso_sq"]:
-                loss_model = iso_loss
+            if args.add_loss == "ocsoftmax":
+                loss_model = ocsoftmax
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "ang_iso":
-                loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
+            elif args.add_loss == "amsoftmax":
+                loss_model = amsoftmax_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             else:
                 loss_model = None
-            prev_loss = valLoss
+            prev_eer = val_eer
             early_stop_cnt = 0
         else:
             early_stop_cnt += 1
@@ -384,64 +327,52 @@ def train(args):
             with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
                 res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
             break
-        # if early_stop_cnt == 1:
-        #     torch.save(lfcc_model, os.path.join(args.out_fold, 'anti-spoofing_lfcc_model.pt')
-
-            # print('Dev Accuracy of the model on the val features: {} % '.format(100 * lfcc_correct / total))
 
     return lfcc_model, loss_model
 
 
-def test(args, model, loss_model, part='eval'):
-    model.eval()
-    test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, part,
-                            'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
-                                collate_fn=test_set.collate_fn)
-    lfcc_correct = 0
-    total = 0
-    with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:
-
-        for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
-            lfcc = lfcc.unsqueeze(1).float().to(args.device)
-            feats, lfcc_outputs = model(lfcc)
-            tags = tags.to(args.device)
-            labels = labels.to(args.device)
-
-            if args.add_loss in [None, "center", "isolate", "ang_iso", "multi_isolate", "multicenter_isolate"]:
-                _, lfcc_predicted = torch.max(lfcc_outputs.data, 1)
-                total += labels.size(0)
-                lfcc_correct += (lfcc_predicted == labels).sum().item()
-            elif args.add_loss == "lgm":
-                lfcc_outputs, moutputs, likelihood = loss_model(feats, labels)
-                _, lfcc_predicted = torch.max(lfcc_outputs.data, 1)
-                total += labels.size(0)
-                lfcc_correct += (lfcc_predicted == labels).sum().item()
-            elif args.add_loss == "lgcl":
-                lfcc_outputs, moutputs = loss_model(feats, labels)
-                _, lfcc_predicted = torch.max(lfcc_outputs.data, 1)
-                total += labels.size(0)
-                lfcc_correct += (lfcc_predicted == labels).sum().item()
-
-            # if (i + 1) % 20 == 0:
-            #     print('Step [{}/{}] '.format(i + 1, len(testDataLoader)))
-                # print('Test Accuracy of the model on the eval features: {} %'.format(100 * lfcc_correct / total))
-            for j in range(labels.size(0)):
-                if args.add_loss == "ang_iso":
-                    score = F.normalize(feats[j].unsqueeze(0), p=2, dim=1) @ F.normalize(loss_model.center, p=2, dim=1).transpose(0,1)
-                    score = score.data.item()
-                elif args.add_loss == "lgcl":
-                    outputs, moutputs = loss_model(feats, labels)
-                    score = F.softmax(outputs, dim=1)[:, 0]
-                else:
-                    score = lfcc_outputs.data[j][0].cpu().numpy()
-                cm_score_file.write(
-                    '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
-                                          "spoof" if labels[j].data.cpu().numpy() else "bonafide",
-                                          score))
-    eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(args.out_fold, 'cm_score.txt'), args.path_to_database)
-
-    return eer_cm, min_tDCF
+# def test(args, model, loss_model, part='eval'):
+#     model.eval()
+#     test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, part,
+#                             'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+#     testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
+#                                 collate_fn=test_set.collate_fn)
+#     lfcc_correct = 0
+#     total = 0
+#     with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:
+#
+#         for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+#             lfcc = lfcc.unsqueeze(1).float().to(args.device)
+#             feats, lfcc_outputs = model(lfcc)
+#             tags = tags.to(args.device)
+#             labels = labels.to(args.device)
+#
+#             if args.add_loss in [None, "ocsoftmax"]:
+#                 _, lfcc_predicted = torch.max(lfcc_outputs.data, 1)
+#                 total += labels.size(0)
+#                 lfcc_correct += (lfcc_predicted == labels).sum().item()
+#             elif args.add_loss == "amsoftmax":
+#                 lfcc_outputs, moutputs = loss_model(feats, labels)
+#                 _, lfcc_predicted = torch.max(lfcc_outputs.data, 1)
+#                 total += labels.size(0)
+#                 lfcc_correct += (lfcc_predicted == labels).sum().item()
+#
+#             for j in range(labels.size(0)):
+#                 if args.add_loss == "ocsoftmax":
+#                     score = F.normalize(feats[j].unsqueeze(0), p=2, dim=1) @ F.normalize(loss_model.center, p=2, dim=1).transpose(0,1)
+#                     score = score.data.item()
+#                 elif args.add_loss == "amsoftmax":
+#                     outputs, moutputs = loss_model(feats, labels)
+#                     score = F.softmax(outputs, dim=1)[:, 0]
+#                 else:
+#                     score = lfcc_outputs.data[j][0].cpu().numpy()
+#                 cm_score_file.write(
+#                     '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
+#                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",
+#                                           score))
+#     eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(args.out_fold, 'cm_score.txt'), args.path_to_database)
+#
+#     return eer_cm, min_tDCF
 
 
 if __name__ == "__main__":
@@ -452,17 +383,3 @@ if __name__ == "__main__":
         loss_model = None
     else:
         loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-    # TReer_cm, TRmin_tDCF = test(args, model, loss_model, "train")
-    # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
-    TEeer_cm, TEmin_tDCF = test(args, model, loss_model)
-    with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
-        # res_file.write('\nTrain EER: %8.5f min-tDCF: %8.5f\n' % (TReer_cm, TRmin_tDCF))
-        # res_file.write('\nVal EER: %8.5f min-tDCF: %8.5f\n' % (VAeer_cm, VAmin_tDCF))
-        res_file.write('\nTest EER: %8.5f min-tDCF: %8.5f\n' % (TEeer_cm, TEmin_tDCF))
-    plot_loss(args)
-
-    # # Test a checkpoint model
-    # args = initParams()
-    # model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_lfcc_model_19.pt'))
-    # loss_model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_19.pt'))
-    # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
