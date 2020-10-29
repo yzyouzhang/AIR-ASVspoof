@@ -26,7 +26,6 @@ def initParams():
 
     # Dataset prepare
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
-    parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat'],
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
@@ -113,24 +112,15 @@ def train(args):
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
-                                'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    genuine_trainset = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
-                                'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, genuine_only=True)
+                                'LFCC', feat_len=args.feat_len, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
-                                  'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+                                  'LFCC', feat_len=args.feat_len, padding=args.padding)
     trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=training_set.collate_fn)
-    genuine_trainDataLoader = DataLoader(genuine_trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                 collate_fn=genuine_trainset.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                collate_fn=validation_set.collate_fn)
 
-    test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, "eval",
-                            'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
-                                collate_fn=test_set.collate_fn)
-
-    feat, _, _, _ = training_set[23]
+    feat, _, _, _ = training_set[29]
     print("Feature shape", feat.shape)
 
     criterion = nn.CrossEntropyLoss()
@@ -152,16 +142,14 @@ def train(args):
     else:
         monitor_loss = args.add_loss
     for epoch_num in tqdm(range(args.num_epochs)):
-        genuine_feats, ip1_loader, tag_loader, idx_loader = [], [], [], []
         lfcc_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
-        testlossDict = defaultdict(list)
         adjust_learning_rate(args, lfcc_optimizer, epoch_num)
-        if args.add_loss == "isolate":
-            adjust_learning_rate(args, iso_optimzer, epoch_num)
         if args.add_loss == "ocsoftmax":
             adjust_learning_rate(args, ocsoftmax_optimzer, epoch_num)
+        elif args.add_loss == "amsoftmax":
+            adjust_learning_rate(args, amsoftmax_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
             lfcc = lfcc.unsqueeze(1).float().to(args.device)
@@ -196,10 +184,6 @@ def train(args):
                 lfcc_optimizer.step()
                 amsoftmax_optimzer.step()
 
-            ip1_loader.append(feats)
-            idx_loader.append((labels))
-            tag_loader.append((tags))
-
             with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(i) + "\t" +
                           str(np.nanmean(trainlossDict[monitor_loss])) + "\n")
@@ -207,20 +191,15 @@ def train(args):
         # Val the model
         lfcc_model.eval()
         with torch.no_grad():
-            ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
             for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
+                idx_loader, score_loader = [], []
                 lfcc = lfcc.unsqueeze(1).float().to(args.device)
-                tags = tags.to(args.device)
                 labels = labels.to(args.device)
 
                 feats, lfcc_outputs = lfcc_model(lfcc)
 
                 lfcc_loss = criterion(lfcc_outputs, labels)
                 score = F.softmax(lfcc_outputs, dim=1)[:, 0]
-
-                ip1_loader.append(feats)
-                idx_loader.append((labels))
-                tag_loader.append((tags))
 
                 if args.add_loss == None:
                     devlossDict["base_loss"].append(lfcc_loss.item())
@@ -229,10 +208,6 @@ def train(args):
                     lfcc_loss = criterion(moutputs, labels)
                     score = F.softmax(outputs, dim=1)[:, 0]
                     devlossDict[args.add_loss].append(lfcc_loss.item())
-                elif args.add_loss in ["isolate", "iso_sq"]:
-                    isoloss = iso_loss(feats, labels)
-                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
-                    devlossDict[args.add_loss].append(isoloss.item())
                 elif args.add_loss == "ocsoftmax":
                     ocsoftmaxloss, score = ocsoftmax(feats, labels)
                     devlossDict[args.add_loss].append(ocsoftmaxloss.item())
@@ -289,10 +264,6 @@ def train(args):
         #         log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
         #     print("Test EER: {}".format(eer))
 
-
-        valLoss = np.nanmean(devlossDict[monitor_loss])
-        # if args.add_loss == "isolate":
-        #     print("isolate center: ", iso_loss.center.data)
         if (epoch_num + 1) % 2 == 0:
             torch.save(lfcc_model, os.path.join(args.out_fold, 'checkpoint',
                                                 'anti-spoofing_lfcc_model_%d.pt' % (epoch_num + 1)))
@@ -334,7 +305,7 @@ def train(args):
 # def test(args, model, loss_model, part='eval'):
 #     model.eval()
 #     test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, part,
-#                             'LFCC', feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+#                             'LFCC', feat_len=args.feat_len, padding=args.padding)
 #     testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
 #                                 collate_fn=test_set.collate_fn)
 #     lfcc_correct = 0

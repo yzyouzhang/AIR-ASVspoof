@@ -9,7 +9,7 @@ torch.set_default_tensor_type(torch.FloatTensor)
 
 class ASVspoof2019(Dataset):
     def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC',
-                 genuine_only=False, feat_len=650, pad_chop=True, padding='zero'):
+                 genuine_only=False, feat_len=750, padding='zero'):
         self.access_type = access_type
         self.ptd = path_to_database
         self.path_to_features = path_to_features
@@ -19,7 +19,6 @@ class ASVspoof2019(Dataset):
         self.genuine_only = genuine_only
         self.feat_len = feat_len
         self.feature = feature
-        self.pad_chop = pad_chop
         self.path_to_protocol = path_to_protocol
         self.padding = padding
         protocol = os.path.join(self.path_to_protocol, 'ASVspoof2019.'+access_type+'.cm.'+ self.part + '.trl.txt')
