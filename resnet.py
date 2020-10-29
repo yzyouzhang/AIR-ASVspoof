@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 
+## Adapted from https://github.com/joaomonteirof/e2e_antispoofing
+
 class SelfAttention(nn.Module):
     def __init__(self, hidden_size, mean_only=False):
         super(SelfAttention, self).__init__()

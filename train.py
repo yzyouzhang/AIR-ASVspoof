@@ -1,12 +1,16 @@
 import argparse
+import os
 import json
 import shutil
 from resnet import ResNet
 from loss import *
+from dataset import ASVspoof2019
 from collections import defaultdict
-from tqdm import tqdm, trange
-from utils import *
+from tqdm import tqdm
 import eval_metrics as em
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
 
 torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -86,8 +90,6 @@ def initParams():
         file.write("Start recording training loss ...\n")
     with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
         file.write("Start recording validation loss ...\n")
-    with open(os.path.join(args.out_fold, 'test_loss.log'), 'w') as file:
-        file.write("Start recording test loss ...\n")
 
     args.cuda = torch.cuda.is_available()
     print('Cuda device available: ', args.cuda)
@@ -153,7 +155,6 @@ def train(args):
         print('\nEpoch: %d ' % (epoch_num + 1))
         for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
             lfcc = lfcc.unsqueeze(1).float().to(args.device)
-            tags = tags.to(args.device)
             labels = labels.to(args.device)
             feats, lfcc_outputs = lfcc_model(lfcc)
             lfcc_loss = criterion(lfcc_outputs, labels)
@@ -191,8 +192,8 @@ def train(args):
         # Val the model
         lfcc_model.eval()
         with torch.no_grad():
+            idx_loader, score_loader = [], []
             for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
-                idx_loader, score_loader = [], []
                 lfcc = lfcc.unsqueeze(1).float().to(args.device)
                 labels = labels.to(args.device)
 
@@ -224,59 +225,18 @@ def train(args):
                 log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[monitor_loss])) + "\t" + str(val_eer) +"\n")
             print("Val EER: {}".format(val_eer))
 
-        # # Test the model
-        # with torch.no_grad():
-        #     ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-        #     for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
-        #         lfcc = lfcc.unsqueeze(1).float().to(args.device)
-        #         tags = tags.to(args.device)
-        #         labels = labels.to(args.device)
-        #
-        #         feats, lfcc_outputs = lfcc_model(lfcc)
-        #
-        #         lfcc_loss = criterion(lfcc_outputs, labels)
-        #         score = F.softmax(lfcc_outputs, dim=1)[:, 0]
-        #
-        #         ip1_loader.append(feats)
-        #         idx_loader.append((labels))
-        #         tag_loader.append((tags))
-        #
-        #         if args.add_loss in == None:
-        #             testlossDict["base_loss"].append(lfcc_loss.item())
-        #         elif args.add_loss == "amsoftmax":
-        #             outputs, moutputs = amsoftmax_loss(feats, labels)
-        #             lfcc_loss = criterion(moutputs, labels)
-        #             score = F.softmax(outputs, dim=1)[:, 0]
-        #             testlossDict[args.add_loss].append(lfcc_loss.item())
-        #         elif args.add_loss == "ocsoftmax":
-        #             ocsoftmaxloss, score = ocsoftmax(feats, labels)
-        #             testlossDict[args.add_loss].append(ocsoftmaxloss.item())
-        #
-        #         score_loader.append(score)
-        #
-        #     scores = torch.cat(score_loader, 0).data.cpu().numpy()
-        #     labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-        #     eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-        #     other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-        #     eer = min(eer, other_eer)
-        #
-        #     with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
-        #         log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
-        #     print("Test EER: {}".format(eer))
-
-        if (epoch_num + 1) % 2 == 0:
-            torch.save(lfcc_model, os.path.join(args.out_fold, 'checkpoint',
-                                                'anti-spoofing_lfcc_model_%d.pt' % (epoch_num + 1)))
-            if args.add_loss == "ocsoftmax":
-                loss_model = ocsoftmax
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "amsoftmax":
-                loss_model = amsoftmax_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            else:
-                loss_model = None
+        torch.save(lfcc_model, os.path.join(args.out_fold, 'checkpoint',
+                                            'anti-spoofing_lfcc_model_%d.pt' % (epoch_num + 1)))
+        if args.add_loss == "ocsoftmax":
+            loss_model = ocsoftmax
+            torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+        elif args.add_loss == "amsoftmax":
+            loss_model = amsoftmax_loss
+            torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
+                                                'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
+        else:
+            loss_model = None
 
         if val_eer < prev_eer:
             # Save the model checkpoint
@@ -300,50 +260,6 @@ def train(args):
             break
 
     return lfcc_model, loss_model
-
-
-# def test(args, model, loss_model, part='eval'):
-#     model.eval()
-#     test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, part,
-#                             'LFCC', feat_len=args.feat_len, padding=args.padding)
-#     testDataLoader = DataLoader(test_set, batch_size=args.batch_size // 2, shuffle=False, num_workers=args.num_workers,
-#                                 collate_fn=test_set.collate_fn)
-#     lfcc_correct = 0
-#     total = 0
-#     with open(os.path.join(args.out_fold, 'cm_score.txt'), 'w') as cm_score_file:
-#
-#         for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
-#             lfcc = lfcc.unsqueeze(1).float().to(args.device)
-#             feats, lfcc_outputs = model(lfcc)
-#             tags = tags.to(args.device)
-#             labels = labels.to(args.device)
-#
-#             if args.add_loss in [None, "ocsoftmax"]:
-#                 _, lfcc_predicted = torch.max(lfcc_outputs.data, 1)
-#                 total += labels.size(0)
-#                 lfcc_correct += (lfcc_predicted == labels).sum().item()
-#             elif args.add_loss == "amsoftmax":
-#                 lfcc_outputs, moutputs = loss_model(feats, labels)
-#                 _, lfcc_predicted = torch.max(lfcc_outputs.data, 1)
-#                 total += labels.size(0)
-#                 lfcc_correct += (lfcc_predicted == labels).sum().item()
-#
-#             for j in range(labels.size(0)):
-#                 if args.add_loss == "ocsoftmax":
-#                     score = F.normalize(feats[j].unsqueeze(0), p=2, dim=1) @ F.normalize(loss_model.center, p=2, dim=1).transpose(0,1)
-#                     score = score.data.item()
-#                 elif args.add_loss == "amsoftmax":
-#                     outputs, moutputs = loss_model(feats, labels)
-#                     score = F.softmax(outputs, dim=1)[:, 0]
-#                 else:
-#                     score = lfcc_outputs.data[j][0].cpu().numpy()
-#                 cm_score_file.write(
-#                     '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
-#                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",
-#                                           score))
-#     eer_cm, min_tDCF = compute_eer_and_tdcf(os.path.join(args.out_fold, 'cm_score.txt'), args.path_to_database)
-#
-#     return eer_cm, min_tDCF
 
 
 if __name__ == "__main__":
