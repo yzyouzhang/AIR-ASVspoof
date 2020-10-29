@@ -28,7 +28,6 @@ def test_model(feat_model_path, loss_model_path, part, add_loss):
     model.eval()
 
     with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
-        score_loader = []
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
             cqcc = cqcc.unsqueeze(1).float().to(device)
             tags = tags.to(device)
@@ -57,7 +56,7 @@ def test_model(feat_model_path, loss_model_path, part, add_loss):
 def test(model_dir, add_loss):
     model_path = os.path.join(model_dir, "anti-spoofing_lfcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_model(feat_model_path, loss_model_path, "eval", add_loss)
+    test_model(model_path, loss_model_path, "eval", add_loss)
 
 if __name__ == "__main__":
     model_dir = "/data/neil/antiRes/models1028/softmax"
