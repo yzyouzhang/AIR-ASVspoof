@@ -48,11 +48,11 @@ def initParams():
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
     parser.add_argument('--add_loss', type=str, default="ocsoftmax",
-                        choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="add other loss for one-class training")
+                        choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
-    parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
-    parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
-    parser.add_argument('--alpha', type=float, default=20, help="scale factor for angular isolate loss")
+    parser.add_argument('--r_real', type=float, default=0.9, help="r_real for ocsoftmax")
+    parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for ocsoftmax")
+    parser.add_argument('--alpha', type=float, default=20, help="scale factor for ocsoftmax")
 
     args = parser.parse_args()
 
