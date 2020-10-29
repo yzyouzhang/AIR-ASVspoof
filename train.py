@@ -157,10 +157,10 @@ def train(args):
             labels = labels.to(args.device)
             feats, lfcc_outputs = lfcc_model(lfcc)
             lfcc_loss = criterion(lfcc_outputs, labels)
-            trainlossDict["base_loss"].append(lfcc_loss.item())
 
             if args.add_loss == "softmax":
                 lfcc_optimizer.zero_grad()
+                trainlossDict[args.add_loss].append(lfcc_loss.item())
                 lfcc_loss.backward()
                 lfcc_optimizer.step()
 
