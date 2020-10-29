@@ -8,8 +8,8 @@ from torch.utils.data.dataloader import default_collate
 torch.set_default_tensor_type(torch.FloatTensor)
 
 class ASVspoof2019(Dataset):
-    def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC',
-                 genuine_only=False, feat_len=750, padding='zero'):
+    def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='LFCC',
+                 genuine_only=False, feat_len=750, padding='repeat'):
         self.access_type = access_type
         self.ptd = path_to_database
         self.path_to_features = path_to_features

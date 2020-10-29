@@ -17,6 +17,7 @@ def reload_data(path_to_features, part):
             with open(path_to_features + part +'/'+ key + 'LFCC.pkl', 'wb') as handle2:
                 pickle.dump(lfcc, handle2, protocol=pickle.HIGHEST_PROTOCOL)
 
+
 if __name__ == "__main__":
     reload_data(path_to_features, 'train')
     reload_data(path_to_features, 'dev')

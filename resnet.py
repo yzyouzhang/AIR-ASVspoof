@@ -126,16 +126,11 @@ class ResNet(nn.Module):
         self.conv5 = nn.Conv2d(512 * block.expansion, 256, kernel_size=(num_nodes, 3), stride=(1, 1), padding=(0, 1),
                                bias=False)
         self.bn5 = nn.BatchNorm2d(256)
-
         self.fc = nn.Linear(256 * 2, enc_dim)
-
         self.fc_mu = nn.Linear(enc_dim, nclasses) if nclasses >= 2 else nn.Linear(enc_dim, 1)
 
         self.initialize_params()
-
         self.attention = SelfAttention(256)
-
-        self.fc_att = nn.Linear(256*82, 512)
 
     def initialize_params(self):
 

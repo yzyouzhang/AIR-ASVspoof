@@ -35,14 +35,13 @@ class OCSoftmax(nn.Module):
         return loss, -output_scores.squeeze(1)
 
 class AMSoftmax(nn.Module):
-
-    def __init__(self, num_classes, feat_dim, s=20, m=0.9):
+    def __init__(self, num_classes, enc_dim, s=20, m=0.9):
         super(AMSoftmax, self).__init__()
-        self.feat_dim = feat_dim
+        self.enc_dim = enc_dim
         self.num_classes = num_classes
         self.s = s
         self.m = m
-        self.centers = nn.Parameter(torch.randn(num_classes, feat_dim))
+        self.centers = nn.Parameter(torch.randn(num_classes, enc_dim))
 
     def forward(self, feat, label):
         batch_size = feat.shape[0]

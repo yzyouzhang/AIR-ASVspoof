@@ -119,22 +119,3 @@ def compute_eer_and_tdcf(cm_score_file, path_to_database):
 
     return min(eer_cm, other_eer_cm), min_tDCF
 
-
-if __name__ == "__main__":
-    # Replace CM scores with your own scores or provide score file as the first argument.
-    cm_score_file = 'cm_score_ocnn.txt'
-    # Replace ASV scores with organizers' scores or provide score file as the second argument.
-    # path_to_database = '/home/yzh298/Downloads/DS_10283_3336/'
-    path_to_database = '/data/neil/DS_10283_3336/'  # if run on GPU
-
-    # args = sys.argv
-    # if len(args) > 1:
-    #     if len(args) != 3:
-    #         print('USAGE: python evaluate_tDCF_asvspoof19.py <CM_SCOREFILE> <ASV_SCOREFILE>')
-    #         exit()
-    #     else:
-    #         cm_score_file = args[1]
-    #         asv_score_file = args[2]
-
-    compute_eer_and_tdcf(cm_score_file, path_to_database)
-
