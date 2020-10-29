@@ -18,7 +18,7 @@ def test_model(feat_model_path, loss_model_path, part, add_loss):
     else:
         dir_path = dirname(feat_model_path)
     model = torch.load(feat_model_path)
-    loss_model = torch.load(loss_model_path) if add_loss is not None else None
+    loss_model = torch.load(loss_model_path) if add_loss != "softmax" else None
     test_set = ASVspoof2019("LA", "/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
                             "LFCC", feat_len=750, padding="repeat")
@@ -131,7 +131,7 @@ def test_individual_attacks(cm_score_file):
 
 if __name__ == "__main__":
     model_dir = "/data/neil/antiRes/models1028/softmax"
-    test(model_dir, None)
+    test(model_dir, "softmax")
     eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
     print(eer_cm_lst)
     print(min_tDCF_lst)

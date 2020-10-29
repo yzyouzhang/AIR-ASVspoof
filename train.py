@@ -47,8 +47,8 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--add_loss', type=str, default=None,
-                        choices=[None, 'amsoftmax', 'ocsoftmax'], help="add other loss for one-class training")
+    parser.add_argument('--add_loss', type=str, default="ocsoftmax",
+                        choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
@@ -139,10 +139,9 @@ def train(args):
 
     early_stop_cnt = 0
     prev_eer = 1e8
-    if args.add_loss is None:
-        monitor_loss = 'base_loss'
-    else:
-        monitor_loss = args.add_loss
+
+    monitor_loss = args.add_loss
+
     for epoch_num in tqdm(range(args.num_epochs)):
         lfcc_model.train()
         trainlossDict = defaultdict(list)
@@ -160,7 +159,7 @@ def train(args):
             lfcc_loss = criterion(lfcc_outputs, labels)
             trainlossDict["base_loss"].append(lfcc_loss.item())
 
-            if args.add_loss == None:
+            if args.add_loss == "softmax":
                 lfcc_optimizer.zero_grad()
                 lfcc_loss.backward()
                 lfcc_optimizer.step()
@@ -202,8 +201,8 @@ def train(args):
                 lfcc_loss = criterion(lfcc_outputs, labels)
                 score = F.softmax(lfcc_outputs, dim=1)[:, 0]
 
-                if args.add_loss == None:
-                    devlossDict["base_loss"].append(lfcc_loss.item())
+                if args.add_loss == "softmax":
+                    devlossDict["softmax"].append(lfcc_loss.item())
                 elif args.add_loss == "amsoftmax":
                     outputs, moutputs = amsoftmax_loss(feats, labels)
                     lfcc_loss = criterion(moutputs, labels)
@@ -266,7 +265,7 @@ if __name__ == "__main__":
     args = initParams()
     _, _ = train(args)
     model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_lfcc_model.pt'))
-    if args.add_loss is None:
+    if args.add_loss == "softmax":
         loss_model = None
     else:
         loss_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
