@@ -1,3 +1,4 @@
+import argparse
 import os
 import torch
 from torch.utils.data import DataLoader
@@ -130,21 +131,14 @@ def test_individual_attacks(cm_score_file):
 
 
 if __name__ == "__main__":
-    model_dir = "/data/neil/antiRes/models1028/softmax"
-    test(model_dir, "softmax")
-    eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
-    print(eer_cm_lst)
-    print(min_tDCF_lst)
-
-    model_dir = "/data/neil/antiRes/models1028/amsoftmax"
-    test(model_dir, "amsoftmax")
-    eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
-    print(eer_cm_lst)
-    print(min_tDCF_lst)
-
-    model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
-    test(model_dir, "ocsoftmax")
-    eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
-    print(eer_cm_lst)
-    print(min_tDCF_lst)
-
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-m', '--model_dir', type=str, help="path to the trained model", default="./models/ocsoftmax")
+    parser.add_argument('-l', '--loss', type=str, default="ocsoftmax",
+                        choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="loss function")
+    parser.add_argument("--gpu", type=str, help="GPU index", default="1")
+    args = parser.parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    test(args.model_dir, args.loss)
+    # eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(args.model_dir, 'checkpoint_cm_score.txt'))
+    # print(eer_cm_lst)
+    # print(min_tDCF_lst)
