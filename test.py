@@ -2,6 +2,7 @@ import argparse
 import os
 import torch
 from torch.utils.data import DataLoader
+import torch.nn as nn
 import torch.nn.functional as F
 from dataset import ASVspoof2019
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
@@ -9,23 +10,25 @@ from tqdm import tqdm
 import eval_metrics as em
 import numpy as np
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-def test_model(feat_model_path, loss_model_path, part, add_loss):
+def test_model(feat_model_path, loss_model_path, part, add_loss, device):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
         dir_path = dirname(dirname(feat_model_path))
     else:
         dir_path = dirname(feat_model_path)
-    model = torch.load(feat_model_path)
+    model = torch.load(feat_model_path, map_location="cuda")
+    # print(list(range(torch.cuda.device_count())))
+    # model = nn.DataParallel(model, list(range(torch.cuda.device_count()))) # for multiple GPUs
+    model = model.to(device)
     loss_model = torch.load(loss_model_path) if add_loss != "softmax" else None
+    # if add_loss != "softmax":
+    #     loss_model = nn.DataParallel(loss_model, list(range(torch.cuda.device_count())))
     test_set = ASVspoof2019("LA", "/data/neil/DS_10283_3336/", "/dataNVME/neil/ASVspoof2019LAFeatures/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
                             "LFCC", feat_len=750, padding="repeat")
     testDataLoader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=0,
                                 collate_fn=test_set.collate_fn)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
 
     with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
@@ -54,10 +57,10 @@ def test_model(feat_model_path, loss_model_path, part, add_loss):
                                             "/data/neil/DS_10283_3336/")
     return eer_cm, min_tDCF
 
-def test(model_dir, add_loss):
+def test(model_dir, add_loss, device):
     model_path = os.path.join(model_dir, "anti-spoofing_lfcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_model(model_path, loss_model_path, "eval", add_loss)
+    test_model(model_path, loss_model_path, "eval", add_loss, device)
 
 def test_individual_attacks(cm_score_file):
     asv_score_file = os.path.join('/data/neil/DS_10283_3336',
@@ -135,10 +138,11 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--model_dir', type=str, help="path to the trained model", default="./models/ocsoftmax")
     parser.add_argument('-l', '--loss', type=str, default="ocsoftmax",
                         choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="loss function")
-    parser.add_argument("--gpu", type=str, help="GPU index", default="1")
+    parser.add_argument("--gpu", type=str, help="GPU index", default="0")
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-    test(args.model_dir, args.loss)
+    args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    test(args.model_dir, args.loss, args.device)
     # eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(args.model_dir, 'checkpoint_cm_score.txt'))
     # print(eer_cm_lst)
     # print(min_tDCF_lst)

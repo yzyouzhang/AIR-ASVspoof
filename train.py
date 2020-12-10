@@ -2,7 +2,7 @@ import argparse
 import os
 import json
 import shutil
-from resnet import ResNet
+from resnet import setup_seed, ResNet
 from loss import *
 from dataset import ASVspoof2019
 from collections import defaultdict
@@ -60,12 +60,7 @@ def initParams():
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     # Set seeds
-    os.environ['PYTHONHASHSEED'] = str(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
-    torch.backends.cudnn.deterministic = True
+    setup_seed(args.seed)
 
     # Path for output data
     if not os.path.exists(args.out_fold):
@@ -97,8 +92,8 @@ def initParams():
     args.cuda = torch.cuda.is_available()
     print('Cuda device available: ', args.cuda)
     args.device = torch.device("cuda" if args.cuda else "cpu")
-    if int(args.gpu) == 5:
-        args.device = torch.device("cpu")
+    # if int(args.gpu) == 5:
+    #     args.device = torch.device("cpu")
 
     return args
 
@@ -112,6 +107,7 @@ def train(args):
 
     # initialize model
     lfcc_model = ResNet(3, args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
+    # lfcc_model = nn.DataParallel(lfcc_model, list(range(torch.cuda.device_count()))) # for multiple GPUs
 
     lfcc_optimizer = torch.optim.Adam(lfcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)

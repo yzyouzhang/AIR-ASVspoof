@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+import os
+import random
+import numpy as np
 
 ## Adapted from https://github.com/joaomonteirof/e2e_antispoofing
 
@@ -104,6 +107,13 @@ RESNET_CONFIGS = {'18': [[2, 2, 2, 2], PreActBlock],
                   '101': [[3, 4, 23, 3], PreActBottleneck]
                   }
 
+def setup_seed(seed):
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 class ResNet(nn.Module):
     def __init__(self, num_nodes, enc_dim, resnet_type='18', nclasses=2):
@@ -133,7 +143,6 @@ class ResNet(nn.Module):
         self.attention = SelfAttention(256)
 
     def initialize_params(self):
-
         for layer in self.modules():
             if isinstance(layer, torch.nn.Conv2d):
                 init.kaiming_normal_(layer.weight, a=0, mode='fan_out')
