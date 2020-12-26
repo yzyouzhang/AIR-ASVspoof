@@ -107,13 +107,17 @@ RESNET_CONFIGS = {'18': [[2, 2, 2, 2], PreActBlock],
                   '101': [[3, 4, 23, 3], PreActBottleneck]
                   }
 
-def setup_seed(seed):
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.backends.cudnn.deterministic = True
+def setup_seed(random_seed, cudnn_deterministic=True):
+    ## initialization
+    # torch.manual_seed(random_seed)
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+    os.environ['PYTHONHASHSEED'] = str(random_seed)
+
+    # if torch.cuda.is_available():
+    #     torch.cuda.manual_seed_all(random_seed)
+    #     torch.backends.cudnn.deterministic = cudnn_deterministic
+    #     torch.backends.cudnn.benchmark = False
 
 class ResNet(nn.Module):
     def __init__(self, num_nodes, enc_dim, resnet_type='18', nclasses=2):

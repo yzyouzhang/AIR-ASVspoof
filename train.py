@@ -17,8 +17,6 @@ torch.set_default_tensor_type(torch.FloatTensor)
 def initParams():
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument('--seed', type=int, help="random number seed", default=688)
-
     # Data folder prepare
     parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
     parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
@@ -46,6 +44,7 @@ def initParams():
     parser.add_argument('--eps', type=float, default=1e-8, help="epsilon for Adam")
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
+    parser.add_argument('--seed', type=int, help="random number seed", default=688)
 
     parser.add_argument('--add_loss', type=str, default="ocsoftmax",
                         choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="loss for one-class training")
