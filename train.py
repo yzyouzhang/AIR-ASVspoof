@@ -19,7 +19,7 @@ def initParams():
 
     # Data folder prepare
     parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
-    parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
+    # parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
                         default='/dataNVME/neil/ASVspoof2019LAFeatures/')
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
@@ -44,7 +44,7 @@ def initParams():
     parser.add_argument('--eps', type=float, default=1e-8, help="epsilon for Adam")
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
-    parser.add_argument('--seed', type=int, help="random number seed", default=688)
+    parser.add_argument('--seed', type=int, help="random number seed", default=598)
 
     parser.add_argument('--add_loss', type=str, default="ocsoftmax",
                         choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="loss for one-class training")
@@ -60,7 +60,6 @@ def initParams():
 
     # Set seeds
     setup_seed(args.seed)
-
     # Path for output data
     if not os.path.exists(args.out_fold):
         os.makedirs(args.out_fold)
@@ -76,7 +75,7 @@ def initParams():
         os.mkdir(os.path.join(args.out_fold, 'checkpoint'))
 
     # Path for input data
-    assert os.path.exists(args.path_to_database)
+    # assert os.path.exists(args.path_to_database)
     assert os.path.exists(args.path_to_features)
 
     # Save training arguments
@@ -111,9 +110,9 @@ def train(args):
     lfcc_optimizer = torch.optim.Adam(lfcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
-    training_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
+    training_set = ASVspoof2019(args.access_type, args.path_to_features, args.path_to_protocol, 'train',
                                 'LFCC', feat_len=args.feat_len, padding=args.padding)
-    validation_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
+    validation_set = ASVspoof2019(args.access_type, args.path_to_features, args.path_to_protocol, 'dev',
                                   'LFCC', feat_len=args.feat_len, padding=args.padding)
     trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=training_set.collate_fn)
