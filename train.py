@@ -53,6 +53,8 @@ def initParams():
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for ocsoftmax")
     parser.add_argument('--alpha', type=float, default=20, help="scale factor for ocsoftmax")
 
+    parser.add_argument('--continue_training', action='store_true', help="continue training with previously trained model")
+
     args = parser.parse_args()
 
     # Change this to specify GPU
@@ -105,7 +107,8 @@ def train(args):
 
     # initialize model
     lfcc_model = ResNet(3, args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
-    # lfcc_model = nn.DataParallel(lfcc_model, list(range(torch.cuda.device_count()))) # for multiple GPUs
+    if args.continue_training:
+        lfcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_lfcc_model.pt')).to(args.device)
 
     lfcc_optimizer = torch.optim.Adam(lfcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
