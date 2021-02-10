@@ -19,7 +19,6 @@ def initParams():
 
     # Data folder prepare
     parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
-    # parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
                         default='/dataNVME/neil/ASVspoof2019LAFeatures/')
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
@@ -77,7 +76,6 @@ def initParams():
         os.mkdir(os.path.join(args.out_fold, 'checkpoint'))
 
     # Path for input data
-    # assert os.path.exists(args.path_to_database)
     assert os.path.exists(args.path_to_features)
 
     # Save training arguments
@@ -89,11 +87,10 @@ def initParams():
     with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
         file.write("Start recording validation loss ...\n")
 
+    # assign device
     args.cuda = torch.cuda.is_available()
     print('Cuda device available: ', args.cuda)
     args.device = torch.device("cuda" if args.cuda else "cpu")
-    # if int(args.gpu) == 5:
-    #     args.device = torch.device("cpu")
 
     return args
 
