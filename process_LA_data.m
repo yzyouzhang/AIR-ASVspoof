@@ -50,6 +50,7 @@ for i=1:length(trainfilelist)
     filename_LFCC = fullfile(pathToFeatures, 'train', horzcat('LFCC_', trainfilelist{i}, '.mat'))
     parsave(filename_LFCC, LFCC)
     LFCC = [];
+end
 disp('Done!');
 
 %% Feature extraction for development data
