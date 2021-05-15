@@ -61,31 +61,35 @@ def initParams():
 
     # Set seeds
     setup_seed(args.seed)
-    # Path for output data
-    if not os.path.exists(args.out_fold):
-        os.makedirs(args.out_fold)
+
+    if args.continue_training:
+        assert os.path.exists(args.out_fold)
     else:
-        shutil.rmtree(args.out_fold)
-        os.mkdir(args.out_fold)
+        # Path for output data
+        if not os.path.exists(args.out_fold):
+            os.makedirs(args.out_fold)
+        else:
+            shutil.rmtree(args.out_fold)
+            os.mkdir(args.out_fold)
 
-    # Folder for intermediate results
-    if not os.path.exists(os.path.join(args.out_fold, 'checkpoint')):
-        os.makedirs(os.path.join(args.out_fold, 'checkpoint'))
-    else:
-        shutil.rmtree(os.path.join(args.out_fold, 'checkpoint'))
-        os.mkdir(os.path.join(args.out_fold, 'checkpoint'))
+        # Folder for intermediate results
+        if not os.path.exists(os.path.join(args.out_fold, 'checkpoint')):
+            os.makedirs(os.path.join(args.out_fold, 'checkpoint'))
+        else:
+            shutil.rmtree(os.path.join(args.out_fold, 'checkpoint'))
+            os.mkdir(os.path.join(args.out_fold, 'checkpoint'))
 
-    # Path for input data
-    assert os.path.exists(args.path_to_features)
+        # Path for input data
+        assert os.path.exists(args.path_to_features)
 
-    # Save training arguments
-    with open(os.path.join(args.out_fold, 'args.json'), 'w') as file:
-        file.write(json.dumps(vars(args), sort_keys=True, separators=('\n', ':')))
+        # Save training arguments
+        with open(os.path.join(args.out_fold, 'args.json'), 'w') as file:
+            file.write(json.dumps(vars(args), sort_keys=True, separators=('\n', ':')))
 
-    with open(os.path.join(args.out_fold, 'train_loss.log'), 'w') as file:
-        file.write("Start recording training loss ...\n")
-    with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
-        file.write("Start recording validation loss ...\n")
+        with open(os.path.join(args.out_fold, 'train_loss.log'), 'w') as file:
+            file.write("Start recording training loss ...\n")
+        with open(os.path.join(args.out_fold, 'dev_loss.log'), 'w') as file:
+            file.write("Start recording validation loss ...\n")
 
     # assign device
     args.cuda = torch.cuda.is_available()
