@@ -1,6 +1,6 @@
 AIR-ASVspoof
 ===============
-This repository contains our implementation of the paper, "One-class Learning Towards Synthetic Voice Spoofing Detection".
+This repository contains the official implementation of our SPL paper, "One-class Learning Towards Synthetic Voice Spoofing Detection".
 [Paper link here](https://ieeexplore.ieee.org/document/9417604)
 ## Requirements
 python==3.6
