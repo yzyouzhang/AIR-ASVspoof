@@ -38,3 +38,10 @@ python3 test.py -m ./models/ocsoftmax -l ocsoftmax --gpu 0
   month={},}
 ```
 
+## Follow-up works
+Please check out our follow-up work:
+
+[1] Zhang, Y., Zhu, G., Jiang, F., Duan, Z. (2021) An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems. Proc. Interspeech 2021, 4309-4313, doi: 10.21437/Interspeech.2021-1820 [[link](https://www.isca-speech.org/archive/pdfs/interspeech_2021/zhang21ea_interspeech.pdf)]
+
+[2] Chen, X., Zhang, Y., Zhu, G., Duan, Z. (2021) UR Channel-Robust Synthetic Speech Detection System for ASVspoof 2021. Proc. 2021 Edition of the Automatic Speaker Verification and Spoofing Countermeasures Challenge, 75-82, doi: 10.21437/ASVSPOOF.2021-12 [[link](https://www.isca-speech.org/archive/pdfs/asvspoof_2021/chen21_asvspoof.pdf)]
+
