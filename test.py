@@ -18,12 +18,8 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, device):
     else:
         dir_path = dirname(feat_model_path)
     model = torch.load(feat_model_path, map_location="cuda")
-    # print(list(range(torch.cuda.device_count())))
-    # model = nn.DataParallel(model, list(range(torch.cuda.device_count()))) # for multiple GPUs
     model = model.to(device)
     loss_model = torch.load(loss_model_path) if add_loss != "softmax" else None
-    # if add_loss != "softmax":
-    #     loss_model = nn.DataParallel(loss_model, list(range(torch.cuda.device_count())))
     test_set = ASVspoof2019("LA", "/dataNVME/neil/ASVspoof2019LAFeatures/",
                             "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part,
                             "LFCC", feat_len=750, padding="repeat")

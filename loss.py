@@ -32,7 +32,7 @@ class OCSoftmax(nn.Module):
 
         loss = self.softplus(self.alpha * scores).mean()
 
-        return loss, -output_scores.squeeze(1)
+        return loss, output_scores.squeeze(1)
 
 class AMSoftmax(nn.Module):
     def __init__(self, num_classes, enc_dim, s=20, m=0.9):
