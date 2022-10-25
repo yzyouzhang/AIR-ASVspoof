@@ -22,8 +22,7 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, device):
     loss_model = torch.load(loss_model_path) if add_loss != "softmax" else None
     test_set = ASVspoof2019("LA", "D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/anti-spoofing/ASVspoof2019/LA/Features",
                             "D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols",
-                            part,
-                            "LFCC", feat_len=750, padding="repeat")
+                            part,"LFCC", feat_len=750, padding="repeat")
     testDataLoader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=0,
                                 collate_fn=test_set.collate_fn)
     model.eval()
