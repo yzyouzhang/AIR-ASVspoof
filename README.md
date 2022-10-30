@@ -3,7 +3,8 @@ AIR-ASVspoof
 This repository contains the official implementation of our SPL paper, "One-class Learning Towards Synthetic Voice Spoofing Detection".
 [[Paper link here](https://ieeexplore.ieee.org/document/9417604)] [[arXiv](https://arxiv.org/pdf/2010.13995.pdf)] [[video](https://www.youtube.com/watch?v=pX9aq8CaIvk)]
 ## Requirements
-python==3.6 and pytorch==1.1.0 with torchvision==0.3.0
+python==3.6 and pytorch==1.1.0.
+Note:- Pytorch is currently compatible with only python versions from 3.7 to 3.9. So, that might cause some errors in torch packages.
 
 ## Downloads
 If you want to work on this project. You will have to download a few things.
