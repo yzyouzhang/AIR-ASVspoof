@@ -4,7 +4,7 @@ In case you get torch.cuda.OutOfMemoryError, just reduce batch_size from 32.
 
 The output will be stored in checkpoint_cm_score.txt
 
-The terminal output after running test.py:
+**The terminal output after running test.py:**
 
 D:\Programming\Python\Python\venv39\Scripts\python.exe D:\Programming\Python\Python\AIR-ASVspoof-Suchit\test.py
 D:\Programming\Python\Python\venv39\lib\site-packages\torch\serialization.py:868: SourceChangeWarning: source code of class 'resnet.ResNet' has changed. you can retrieve the original source code by accessing the object's source attribute or set `torch.nn.Module.dump_patches = True` and use the patch tool to revert the changes.
