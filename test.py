@@ -20,11 +20,9 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, device):
     model = torch.load(feat_model_path, map_location="cuda")
     model = model.to(device)
     loss_model = torch.load(loss_model_path) if add_loss != "softmax" else None
-    test_set = ASVspoof2019("LA", "D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/anti-spoofing/ASVspoof2019/LA/Features",
-                            "D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols",
-                            part,"LFCC", feat_len=750, padding="repeat")
-    testDataLoader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=0,
-                                collate_fn=test_set.collate_fn)
+    test_set = ASVspoof2019("LA", "D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/anti-spoofing/ASVspoof2019/LA/Features",
+                            "D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols", part, "LFCC", feat_len=750, padding="repeat")
+    testDataLoader = DataLoader(test_set, batch_size=10, shuffle=False, num_workers=0, collate_fn=test_set.collate_fn)
     model.eval()
 
     with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
@@ -129,7 +127,7 @@ def test_individual_attacks(cm_score_file):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-m', '--model_dir', type=str, help="path to the trained model", default="./models1028/ocsoftmax")
+    parser.add_argument('-m', '--model_dir', type=str, help="path to the trained model", default="D:/Programming/Python/Python/AIR-ASVspoof-Suchit/models1028/ocsoftmax/test_results")
     parser.add_argument('-l', '--loss', type=str, default="ocsoftmax",
                         choices=["softmax", 'amsoftmax', 'ocsoftmax'], help="loss function")
     parser.add_argument("--gpu", type=str, help="GPU index", default="0")
@@ -137,6 +135,6 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     test(args.model_dir, args.loss, args.device)
-    # eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(args.model_dir, 'checkpoint_cm_score.txt'))
-    # print(eer_cm_lst)
-    # print(min_tDCF_lst)
+    eer_cm_lst, min_tDCF_lst = test_individual_attacks(os.path.join(args.model_dir, 'checkpoint_cm_score.txt'))
+    print(eer_cm_lst)
+    print(min_tDCF_lst)
