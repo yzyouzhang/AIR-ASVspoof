@@ -23,7 +23,7 @@
 "model":"resnet"
 "num_epochs":100
 "num_workers":0
-"out_fold":"D:/Programming/Python/Python/AIR-ASVspoof/models1028/ocsoftmax/train"
+"out_fold":"D:/Programming/Python/Python/AIR-ASVspoof-Suchit/models1028/ocsoftmax/"
 "path_to_database":"D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/"
 "path_to_features":"D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/anti-spoofing/ASVspoof2019/LA/"
 "path_to_protocol":"D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/"
