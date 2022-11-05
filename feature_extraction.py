@@ -139,11 +139,11 @@ class LFCC(torch_nn.Module):
 
 if __name__ == "__main__":
     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
-    wav, sr = librosa.load("/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_train/flac/LA_T_3727749.flac", sr=16000)
+    wav, sr = librosa.load("D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/LA/ASVspoof2019_LA_train/flac/LA_T_3727749.flac", sr=16000)
     # wav = torch.randn(1, 32456)
     wav = torch.Tensor(np.expand_dims(wav, axis=0))
     wav_lfcc = lfcc(wav)
-    with open('/dataNVME/neil/ASVspoof2019LAFeatures/train' + '/' + "LA_T_3727749" + "LFCC" + '.pkl', 'rb') as feature_handle:
+    with open('D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/anti-spoofing/ASVspoof2019/LA/Features/train' + '/' + "LA_T_3727749" + "LFCC" + '.pkl', 'rb') as feature_handle:
         ref_lfcc = pickle.load(feature_handle)
     print(ref_lfcc.shape)
     print(ref_lfcc[0:3,0:3])
