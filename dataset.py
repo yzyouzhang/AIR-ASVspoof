@@ -91,5 +91,5 @@ def repeat_padding(spec, ref_len):
 
 if __name__ == "__main__":
     path_to_database = 'D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336'  # if run on GPU
-    path_to_features = 'D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/anti-spoofing/ASVspoof2019/LA/Features'  # if run on GPU
+    path_to_features = 'D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/anti-spoofing/ASVspoof2019/LA/Features'  # if run on GPU
     path_to_protocol = 'D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols'
