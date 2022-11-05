@@ -23,7 +23,7 @@ def initParams():
                         default='D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/anti-spoofing/ASVspoof2019/LA/Features/')
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
                         default='D:/Users/Suchit/Desktop/Acad/EED 305 Digital Signal Processing/DSP Project/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
-    parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models1028/ocsoftmax/train/')
+    parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='D:/Programming/Python/Python/AIR-ASVspoof/models1028/ocsoftmax')
 
     # Dataset prepare
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
