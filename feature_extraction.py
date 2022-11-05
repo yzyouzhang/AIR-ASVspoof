@@ -89,7 +89,6 @@ class LFCC(torch_nn.Module):
         self.with_energy = with_energy
         self.with_emphasis = with_emphasis
         self.with_delta = with_delta
-        return
 
     def forward(self, x):
         """
