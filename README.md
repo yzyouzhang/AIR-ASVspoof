@@ -14,7 +14,7 @@ If you want to work on this project. You will have to download a few things.
    MATLAB implementations for LFCC features are available [here](https://www.asvspoof.org/index2019.html). 
 ## Data Preparation
 The LFCC features are extracted with the MATLAB implementation provided by the ASVspoof 2019 organizers. Please first run the `process_LA_data.m` with MATLAB, and then run python `reload_data.py` with python.
-If you don't have or don't want to use MATLAB, use the python file `feature_extraction.py`, instead of `process_LA_data.m`, and then run `reload_data.py`.
+If you don't have/want to use MATLAB, use the python file `feature_extraction.py`, instead of `process_LA_data.m`, and then run `reload_data.py`.
 Make sure you change the directory path to the path on your machine.
 
 For successful execution of `process_LA_data.m`, we will have to create a folder to contain the output .m files. Create a folder `anti-spoofing` inside DS_10283_3336 as shown in pathToFeatures line of the `process_LA_data.m` file. The output folder there is the Features folder. It should be further divided into dev, eval and train folders.
