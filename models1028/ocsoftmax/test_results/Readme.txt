@@ -1,7 +1,5 @@
-Just ran test.py only for few minutes
-
-In case you get torch.cuda.OutOfMemoryError, just reduce batch_size from 32.
-
+Just ran test.py only for few minutes\
+In case you get torch.cuda.OutOfMemoryError, just reduce batch_size from 32.\
 The output will be stored in checkpoint_cm_score.txt
 
 The terminal output after running test.py:
