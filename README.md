@@ -45,4 +45,6 @@ python test.py -m D:/Programming/Python/Python/AIR-ASVspoof-Suchit/models1028/oc
 The output will be inside the text file `checkpoint_cm_score.txt` in `model_dir` folder.\
 The output will be in the form of: `LA_E_2834763 A11 spoof -0.9655166864395142`.
 
+The final output of the model with a min t-DCF of 0.059, and EER of 2.19%. This model could be in the 3rd position of ASVspoof 2019 competition's LA subset.
+
 You can find citations and future works in the author's repository [here.](https://github.com/yzyouzhang/AIR-ASVspoof)
