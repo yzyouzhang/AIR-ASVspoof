@@ -1,7 +1,23 @@
 AIR-ASVspoof
 ===============
-This repository contains the official implementation of our SPL paper, "One-class Learning Towards Synthetic Voice Spoofing Detection".
-[[Paper link here](https://ieeexplore.ieee.org/document/9417604)] [[arXiv](https://arxiv.org/pdf/2010.13995.pdf)] [[video](https://www.youtube.com/watch?v=pX9aq8CaIvk)]
+# [One-Class Learning Towards Synthetic Voice Spoofing Detection](https://ieeexplore.ieee.org/document/9417604)
+
+[![GitHub](https://img.shields.io/github/stars/yzyouzhang/AIR-ASVspoof)](https://github.com/yzyouzhang/AIR-ASVspoof) | [![IEEE Xplore](https://img.shields.io/badge/IEEE-9417604-E4A42C.svg)](https://ieeexplore.ieee.org/document/9417604) | [![arXiv](https://img.shields.io/badge/arXiv-2010.13995-b31b1b.svg)](https://arxiv.org/abs/2010.13995) 
+
+This repository contains the official implementation of our SPL paper, "One-class Learning Towards Synthetic Voice Spoofing Detection."
+
+[[poster](https://labsites.rochester.edu/air/publications/ICASSP2022Poster_Neil.pdf)]  [[slides](https://labsites.rochester.edu/air/publications/ICASSP2022Slides_Neil.pdf)]  [[video](https://www.youtube.com/watch?v=pX9aq8CaIvk)]  [[Project webpage](https://labsites.rochester.edu/air/projects/asvspoof.html)] 
+
+[![Video](https://img.youtube.com/vi/pX9aq8CaIvk/hqdefault.jpg)](https://youtu.be/pX9aq8CaIvk)
+
+
+## Updates
+[Jun. 2023] We further improved the loss function by proposing SAMO algorithm (Speaker Attractor Multi-Center One-Class Learning) @ ICASSP 2023 ([Ding et al. 2023](https://ieeexplore.ieee.org/document/10094704)). [![GitHub](https://img.shields.io/github/stars/sivannavis/samo)](https://github.com/sivannavis/samo)
+
+[Feb. 2023] We investigated one-class learning more and included new loss functions. Check out the book chapter published in *Handbook of Biometric Anti-Spoofing* ([Zhang et al. 2023](https://link.springer.com/chapter/10.1007/978-981-19-5288-3_15)). [![GitHub](https://img.shields.io/github/stars/yzyouzhang/HBAS_chapter_voice3)](https://github.com/yzyouzhang/HBAS_chapter_voice3)
+
+[Sep. 2021] This version of the code used LFCC+ResNet as the backbone. The LFCC feature was implemented with MATLAB, and ResNet was implemented with PyTorch. If you would like full Python code, please check out our follow-up work @ Interspeech 2021 ([Zhang et al. 2021](https://www.isca-archive.org/interspeech_2021/zhang21ea_interspeech.pdf)). [![GitHub](https://img.shields.io/github/stars/yzyouzhang/Empirical-Channel-CM)](https://github.com/yzyouzhang/Empirical-Channel-CM)
+
 ## Requirements
 python==3.6
 
@@ -45,3 +61,6 @@ Please check out our follow-up work:
 
 [2] Chen, X., Zhang, Y., Zhu, G., Duan, Z. (2021) UR Channel-Robust Synthetic Speech Detection System for ASVspoof 2021. Proc. 2021 Edition of the Automatic Speaker Verification and Spoofing Countermeasures Challenge, 75-82, doi: 10.21437/ASVSPOOF.2021-12 [[link](https://www.isca-speech.org/archive/asvspoof_2021/chen21_asvspoof.html)] [[arXiv](https://arxiv.org/pdf/2107.12018.pdf)] [[code](https://github.com/yzyouzhang/ASVspoof2021_AIR)] [[video](https://www.youtube.com/watch?v=-wKMOTp8Tt0)]
 
+[3] Zhang, Y., Jiang, F., Zhu, G., Chen, X., & Duan, Z. (2023). Generalizing Voice Presentation Attack Detection to Unseen Synthetic Attacks and Channel Variation. In Handbook of Biometric Anti-Spoofing: Presentation Attack Detection and Vulnerability Assessment (pp. 421-443). [[link](https://link.springer.com/chapter/10.1007/978-981-19-5288-3_15)] [[code](https://github.com/yzyouzhang/HBAS_chapter_voice3)]
+
+[4] Ding, S., Zhang, Y., & Duan, Z. (2023). Samo: Speaker attractor multi-center one-class learning for voice anti-spoofing. In ICASSP 2023-2023 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP). [[link](https://ieeexplore.ieee.org/document/10094704)] [[arXiv](https://arxiv.org/abs/2211.02718)] [[code](https://github.com/sivannavis/samo)] [[video](https://youtu.be/2szWD06keUg)]
